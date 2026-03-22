@@ -317,12 +317,18 @@ function buildPage(
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>5h07 — ${escapeHtml(dateFr)}</title>
 <link rel="alternate" type="application/rss+xml" title="5h07" href="/feed.xml">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/favicon.ico">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
 body{max-width:700px;margin:0 auto;padding:1.5em 1em;font-family:'Courier New',Courier,monospace;font-size:15px;line-height:1.6;color:#111;background:#FFFCF0;}
 pre{white-space:pre-wrap;word-wrap:break-word;font-family:inherit;font-size:inherit;line-height:inherit;margin:0;}
 a{color:#0057b7;}
-.logo{font-size:1.4em;font-weight:bold;margin-bottom:0.3em;color:#111;}
+.logo{font-size:0.75em;line-height:1.15;margin-bottom:0.5em;color:#333;}
 .sep{color:#999;margin:1.2em 0;overflow:hidden;}
 .about{font-size:0.82em;color:#888;border-left:2px solid #ddd;padding-left:1em;margin:1em 0 1.5em;}
 .baro{font-size:0.9em;margin:0.8em 0 1.5em;color:#555;}
@@ -347,7 +353,13 @@ a{color:#0057b7;}
 </style>
 </head>
 <body>
-<pre class="logo">La France ce matin</pre>
+<pre class="logo">
+ ____  _    ___  _____
+| ___|| |  / _ \\|___  |
+|___ \\| |_| | | |  / /
+ ___) |  _| |_| | / /
+|____/|_|  \\___/ /_/
+</pre>
 <div class="about">
 chaque matin, une ia lit ~50 sources françaises et trie ce qui
 compte par couverture, diversité politique et ampleur. pas de pub,
@@ -399,6 +411,7 @@ function checkAnswer(el,q,picked,correct){
     document.getElementById('quiz-score').textContent=right+'/'+quizTotal+' — '+msg;
   }
 }
+if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js');}
 </script>
 </body>
 </html>`;

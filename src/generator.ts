@@ -3,8 +3,8 @@ import path from "path";
 import Anthropic from "@anthropic-ai/sdk";
 import { config } from "./config.js";
 import { supabase } from "./db.js";
-import { generateAllRecaps, generateMoodBarometer, generateFilmReco } from "./summarizer.js";
-import type { MoodBarometer, FilmReco } from "./summarizer.js";
+import { generateAllRecaps, generateMoodBarometer } from "./summarizer.js";
+import type { MoodBarometer } from "./summarizer.js";
 
 interface DigestArticle {
   title: string;
@@ -41,7 +41,6 @@ interface BlindSpot {
 interface CachedData {
   recaps?: Record<string, string>;
   barometer?: MoodBarometer;
-  film?: FilmReco;
   clusters?: SerializedCluster[];
 }
 
@@ -253,7 +252,6 @@ function buildPage(
   pastDates: string[],
   recaps: Record<string, string>,
   barometer: MoodBarometer,
-  film: FilmReco,
   clusters: SerializedCluster[]
 ): string {
   const dateFr = formatDateFr(date);
@@ -297,7 +295,7 @@ function buildPage(
 <link rel="alternate" type="application/rss+xml" title="5h07" href="/feed.xml">
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
-body{max-width:700px;margin:0 auto;padding:1.5em 1em;font-family:'Courier New',Courier,monospace;font-size:15px;line-height:1.6;color:#111;background:#fff;}
+body{max-width:700px;margin:0 auto;padding:1.5em 1em;font-family:'Courier New',Courier,monospace;font-size:15px;line-height:1.6;color:#111;background:#FFFCF0;}
 pre{white-space:pre-wrap;word-wrap:break-word;font-family:inherit;font-size:inherit;line-height:inherit;margin:0;}
 a{color:#0057b7;}
 .logo{font-size:0.75em;line-height:1.15;margin-bottom:0.5em;color:#333;}
@@ -310,11 +308,9 @@ a{color:#0057b7;}
 .cluster-data{font-size:0.85em;color:#666;margin-bottom:0.3em;}
 .sources{font-size:0.78em;color:#999;margin-top:2em;}
 .sources a{color:#999;}
-.film{font-size:0.9em;color:#555;margin:0.5em 0;}
-.film-link{font-style:italic;color:#888;}
 .footer{font-size:0.78em;color:#bbb;margin-top:1em;}
 .tip{cursor:pointer;color:#888;font-size:0.75em;margin-left:1px;position:relative;}
-.tip-text{display:none;position:absolute;bottom:1.5em;left:0;background:#fff;border:1px solid #000;padding:0.4em 0.6em;font-size:1.35em;max-width:300px;width:max-content;z-index:10;line-height:1.4;font-style:normal;font-weight:normal;}
+.tip-text{display:none;position:absolute;bottom:1.5em;left:0;background:#FFFCF0;border:1px solid #000;padding:0.4em 0.6em;font-size:1.35em;max-width:300px;width:max-content;z-index:10;line-height:1.4;font-style:normal;font-weight:normal;}
 .dim{font-size:0.82em;color:#999;}
 .dim a{color:#999;}
 </style>
@@ -348,12 +344,15 @@ ${recapToHtml(recaps["principal"] ?? "")}
 ${clusterSection}
 ${blindSpotsSection}
 <pre class="sep">────────────────────────────────────────</pre>
-<div class="film">à voir · ${escapeHtml(film.titre)} (${escapeHtml(film.realisateur)}, ${film.annee})</div>
-<div class="film-link">"${escapeHtml(film.lien)}"</div>
-<pre class="sep">────────────────────────────────────────</pre>
 <div class="sources">sources : ${sourceLinks}</div>
 ${pastSection}
 <pre class="sep">════════════════════════════════════════</pre>
+<pre class="dim">
+  cette page pèse ~${Math.round(recapToHtml(recaps["principal"] ?? "").length / 100 + 10)} ko
+  0 tracker · 0 pub · 0 cookie · 0 image
+  oui, une ia lit ${articles.length * 80}+ articles chaque matin
+  c'est toujours moins que vous sur 50 sites
+</pre>
 <div class="footer">5h07 — l'essentiel de l'actu française, chaque matin à 5h07. scoré par ia, zéro éditorial.</div>
 <script>
 function toggleTip(el){var t=el.querySelector('.tip-text');if(!t)return;var open=t.style.display==='block';closeAllTips();if(!open)t.style.display='block';}
@@ -414,16 +413,14 @@ export async function generate(): Promise<void> {
 
   let recaps: Record<string, string>;
   let barometer: MoodBarometer;
-  let film: FilmReco;
   let clusters: SerializedCluster[] = [];
 
   const cached = existing?.article_ids as CachedData | null;
 
-  if (cached?.recaps && cached?.barometer && cached?.film) {
-    log("Using cached recaps + barometer + film from daily_digests");
+  if (cached?.recaps && cached?.barometer) {
+    log("Using cached recaps + barometer from daily_digests");
     recaps = cached.recaps;
     barometer = cached.barometer;
-    film = cached.film;
     clusters = cached.clusters ?? [];
   } else {
     const client = new Anthropic({ apiKey: config.anthropicApiKey });
@@ -435,15 +432,13 @@ export async function generate(): Promise<void> {
       score: a.score,
       source_name: a.source_name,
     }));
-    log("Generating recaps + barometer + film...");
-    [recaps, barometer, film] = await Promise.all([
+    log("Generating recaps + barometer...");
+    [recaps, barometer] = await Promise.all([
       generateAllRecaps(client, recapArticles),
       generateMoodBarometer(client, recapArticles),
-      generateFilmReco(client, recapArticles),
     ]);
     log(`✓ All recaps generated`);
     log(`✓ Barometer: ${barometer.emoji} ${barometer.mood}/100`);
-    log(`✓ Film: ${film.titre} (${film.realisateur}, ${film.annee})`);
     clusters = cached?.clusters ?? [];
   }
 
@@ -452,15 +447,15 @@ export async function generate(): Promise<void> {
     .from("daily_digests")
     .upsert({
       date: dateIso,
-      article_ids: { urls: articles.map((a) => a.url), recaps, barometer, film, clusters },
+      article_ids: { urls: articles.map((a) => a.url), recaps, barometer, clusters },
     }, { onConflict: "date" });
 
   // Generate pages
-  const indexHtml = buildPage(articles, now, pastDates, recaps, barometer, film, clusters);
+  const indexHtml = buildPage(articles, now, pastDates, recaps, barometer, clusters);
   writeFileSync(path.join(distDir, "index.html"), indexHtml, "utf-8");
   log("✓ dist/index.html");
 
-  const datePage = buildPage(articles, now, pastDates, recaps, barometer, film, clusters);
+  const datePage = buildPage(articles, now, pastDates, recaps, barometer, clusters);
   writeFileSync(path.join(distDir, `${dateIso}.html`), datePage, "utf-8");
   log(`✓ dist/${dateIso}.html`);
 

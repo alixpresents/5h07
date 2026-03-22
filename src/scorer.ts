@@ -13,7 +13,8 @@ Critères de scoring :
 - Échelle : combien de personnes en France sont concernées ?
 - Potentiel : est-ce que cet événement va provoquer d'autres événements importants ?
 
-Ignore les articles people, les résultats sportifs de routine, le clickbait, les marronniers.
+Ignore les articles people, le clickbait, les marronniers.
+Les résultats sportifs, transferts, retraites de joueurs, classements de championnat = score maximum 3/10 sauf événement exceptionnel (mort d'un athlète, scandale de dopage national, pays hôte d'un mondial).
 Privilégie : politique intérieure/extérieure impactante, économie, santé publique, justice, environnement, tech/science quand l'impact est concret.
 
 Réponds UNIQUEMENT en JSON brut (pas de markdown). Un tableau d'objets avec 'id' (le nom de l'événement) et 'score' (nombre décimal).`;

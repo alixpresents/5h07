@@ -322,7 +322,7 @@ function buildPage(
 body{max-width:700px;margin:0 auto;padding:1.5em 1em;font-family:'Courier New',Courier,monospace;font-size:15px;line-height:1.6;color:#111;background:#FFFCF0;}
 pre{white-space:pre-wrap;word-wrap:break-word;font-family:inherit;font-size:inherit;line-height:inherit;margin:0;}
 a{color:#0057b7;}
-.logo{font-size:0.75em;line-height:1.15;margin-bottom:0.5em;color:#333;}
+.logo{font-size:1.4em;font-weight:bold;margin-bottom:0.3em;color:#111;}
 .sep{color:#999;margin:1.2em 0;overflow:hidden;}
 .about{font-size:0.82em;color:#888;border-left:2px solid #ddd;padding-left:1em;margin:1em 0 1.5em;}
 .baro{font-size:0.9em;margin:0.8em 0 1.5em;color:#555;}
@@ -347,13 +347,7 @@ a{color:#0057b7;}
 </style>
 </head>
 <body>
-<pre class="logo">
- ____  _    ___  _____
-| ___|| |  / _ \\|___  |
-|___ \\| |_| | | |  / /
- ___) |  _| |_| | / /
-|____/|_|  \\___/ /_/
-</pre>
+<pre class="logo">La France ce matin</pre>
 <div class="about">
 chaque matin, une ia lit ~50 sources françaises et trie ce qui
 compte par couverture, diversité politique et ampleur. pas de pub,
@@ -518,7 +512,131 @@ export async function generate(): Promise<void> {
   writeFileSync(path.join(distDir, "feed.xml"), feed, "utf-8");
   log("✓ dist/feed.xml");
 
+  // Generate admin page
+  const adminHtml = buildAdminPage(clusters, dateIso);
+  writeFileSync(path.join(distDir, "admin.html"), adminHtml, "utf-8");
+  log("✓ dist/admin.html");
+
   log("Done. Site generated.");
+}
+
+function buildAdminPage(clusters: SerializedCluster[], dateIso: string): string {
+  const top = [...clusters]
+    .sort((a, b) => b.score_final - a.score_final)
+    .slice(0, 20);
+
+  const rows = top.map((c, i) => {
+    const srcList = c.source_names.slice(0, 5).map((s) => escapeHtml(s)).join(", ");
+    const more = c.source_names.length > 5 ? ` +${c.source_names.length - 5}` : "";
+    return `<div class="row" data-name="${escapeHtml(c.name)}" data-idx="${i}">
+<pre>${escapeHtml(c.name)}</pre>
+<pre class="meta">score ${c.score_final.toFixed(1)} · ${c.num_sources} sources · ${srcList}${more}</pre>
+<div class="actions">
+<button data-action="confirmed">👍 confirmé</button>
+<button data-action="overscored">👎 surcoté</button>
+<button data-action="underscored">⬆️ sous-coté</button>
+<button data-action="irrelevant">🗑️ pas pertinent</button>
+</div>
+<pre class="status"></pre>
+</div>`;
+  }).join("\n");
+
+  return `<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>5h07 admin — ${dateIso}</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{max-width:700px;margin:0 auto;padding:1.5em 1em;font-family:'Courier New',Courier,monospace;font-size:14px;line-height:1.5;color:#111;background:#FFFCF0;display:none;}
+pre{white-space:pre-wrap;word-wrap:break-word;font-family:inherit;font-size:inherit;line-height:inherit;margin:0;}
+.row{border-bottom:1px solid #ddd;padding:0.8em 0;}
+.meta{font-size:0.8em;color:#888;margin:0.2em 0 0.4em;}
+.actions{display:flex;gap:0.4em;flex-wrap:wrap;}
+button{font-family:inherit;font-size:0.8em;padding:0.3em 0.6em;cursor:pointer;border:1px solid #ccc;background:#fff;border-radius:2px;}
+button:hover{background:#eee;}
+button:disabled{opacity:0.4;cursor:default;}
+.status{font-size:0.8em;color:#2a7d2a;margin-top:0.2em;}
+.missing{margin-top:1.5em;border-top:1px solid #ddd;padding-top:1em;}
+.missing input{font-family:inherit;font-size:inherit;padding:0.3em;width:60%;border:1px solid #ccc;}
+.missing button{margin-left:0.4em;}
+h1{font-size:1.2em;margin-bottom:0.3em;}
+.dim{font-size:0.8em;color:#999;}
+</style>
+</head>
+<body>
+<h1>5h07 admin</h1>
+<pre class="dim">${dateIso} · ${top.length} sujets</pre>
+<br>
+${rows}
+<div class="missing">
+<pre>sujet manquant :</pre>
+<input type="text" id="missing-input" placeholder="ex: grève SNCF">
+<button onclick="addMissing()">ajouter</button>
+<pre class="status" id="missing-status"></pre>
+</div>
+<script>
+var SB_URL='${config.supabaseUrl}';
+var SB_KEY='${config.supabaseAnonKey}';
+var TODAY='${dateIso}';
+
+(function(){
+  var p=prompt('mot de passe admin');
+  if(p!=='${config.adminPassword}'){document.body.innerHTML='<pre>accès refusé</pre>';document.body.style.display='block';return;}
+  document.body.style.display='block';
+  // Load existing feedback for today
+  fetch(SB_URL+'/rest/v1/feedback?date=eq.'+TODAY+'&select=cluster_name,action',{
+    headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
+  }).then(function(r){return r.json()}).then(function(data){
+    var rows=document.querySelectorAll('.row');
+    for(var i=0;i<rows.length;i++){
+      var name=rows[i].dataset.name;
+      for(var j=0;j<data.length;j++){
+        if(data[j].cluster_name===name){
+          var btns=rows[i].querySelectorAll('button');
+          for(var k=0;k<btns.length;k++)btns[k].disabled=true;
+          rows[i].querySelector('.status').textContent='✓ '+data[j].action;
+          break;
+        }
+      }
+    }
+  });
+})();
+
+document.addEventListener('click',function(e){
+  var btn=e.target.closest('button[data-action]');
+  if(!btn)return;
+  var row=btn.closest('.row');
+  if(!row)return;
+  var name=row.dataset.name;
+  var action=btn.dataset.action;
+  var btns=row.querySelectorAll('button');
+  for(var i=0;i<btns.length;i++)btns[i].disabled=true;
+  fetch(SB_URL+'/rest/v1/feedback',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Prefer':'return=minimal'},
+    body:JSON.stringify({date:TODAY,cluster_name:name,action:action})
+  }).then(function(r){
+    row.querySelector('.status').textContent=r.ok?'✓ enregistré':'✗ erreur';
+  });
+});
+
+function addMissing(){
+  var v=document.getElementById('missing-input').value.trim();
+  if(!v)return;
+  fetch(SB_URL+'/rest/v1/feedback',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY},
+    body:JSON.stringify({date:TODAY,cluster_name:v,action:'missing'})
+  }).then(function(r){
+    document.getElementById('missing-status').textContent=r.ok?'✓ ajouté':'✗ erreur';
+    document.getElementById('missing-input').value='';
+  });
+}
+</script>
+</body>
+</html>`;
 }
 
 // Run directly

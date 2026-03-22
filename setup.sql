@@ -35,6 +35,22 @@ CREATE TABLE daily_digests (
   generated_at timestamptz DEFAULT now()
 );
 
+-- Table: feedback (admin)
+CREATE TABLE feedback (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  date date DEFAULT CURRENT_DATE,
+  cluster_name text,
+  article_url text,
+  action text NOT NULL,
+  note text,
+  created_at timestamptz DEFAULT now()
+);
+
+-- RLS: allow anonymous inserts on feedback
+ALTER TABLE feedback ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow anonymous insert on feedback" ON feedback FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow anonymous select on feedback" ON feedback FOR SELECT USING (true);
+
 -- Index for faster queries
 CREATE INDEX idx_articles_published_at ON articles(published_at);
 CREATE INDEX idx_articles_score ON articles(score);

@@ -1,10 +1,14 @@
+import Anthropic from "@anthropic-ai/sdk";
 import { scrape } from "./scraper.js";
 import { dedup } from "./dedup.js";
 import { score } from "./scorer.js";
 import type { ScoredCluster } from "./scorer.js";
 import { summarize } from "./summarizer.js";
 import { generate } from "./generator.js";
+import { config } from "./config.js";
 import { supabase } from "./db.js";
+
+const MODEL = "claude-haiku-4-5-20251001";
 
 function log(msg: string): void {
   console.log(`[${new Date().toISOString()}] [pipeline] ${msg}`);
@@ -19,8 +23,26 @@ async function runStep<T>(name: string, fn: () => Promise<T>): Promise<T> {
   return result;
 }
 
-// Serialize ScoredCluster for JSON storage (Sets → arrays)
-function serializeClusters(clusters: ScoredCluster[]): object[] {
+interface SerializedCluster {
+  name: string;
+  article_ids: string[];
+  source_names: string[];
+  orientations: string[];
+  raw_orientations: string[];
+  best_title: string;
+  best_description: string | null;
+  best_article_id: string;
+  score_couverture: number;
+  score_diversite: number;
+  score_llm: number;
+  score_fraicheur: number;
+  score_final: number;
+  num_sources: number;
+  is_new?: boolean;
+  streak_days?: number;
+}
+
+function serializeClusters(clusters: ScoredCluster[]): SerializedCluster[] {
   return clusters.map((c) => ({
     name: c.name,
     article_ids: c.article_ids,
@@ -39,6 +61,115 @@ function serializeClusters(clusters: ScoredCluster[]): object[] {
   }));
 }
 
+async function fetchPastClusters(days: number): Promise<Record<string, string[]>> {
+  // Returns { "2026-03-22": ["sujet1", "sujet2", ...], ... }
+  const result: Record<string, string[]> = {};
+  const { data, error } = await supabase
+    .from("daily_digests")
+    .select("date, article_ids")
+    .order("date", { ascending: false })
+    .limit(days);
+
+  if (error || !data) return result;
+  for (const row of data) {
+    const clusters = (row.article_ids as { clusters?: { name: string }[] })?.clusters;
+    if (clusters) {
+      result[row.date as string] = clusters.map((c) => c.name);
+    }
+  }
+  return result;
+}
+
+async function enrichWithHistory(
+  topClusters: SerializedCluster[],
+  dateIso: string
+): Promise<SerializedCluster[]> {
+  const pastData = await fetchPastClusters(30);
+  const pastDates = Object.keys(pastData).filter((d) => d !== dateIso).sort().reverse();
+
+  if (pastDates.length === 0) {
+    log("No past data, skipping history enrichment");
+    return topClusters;
+  }
+
+  // Collect all past cluster names
+  const allPastNames: string[] = [];
+  for (const d of pastDates) {
+    for (const name of pastData[d]) {
+      if (!allPastNames.includes(name)) allPastNames.push(name);
+    }
+  }
+
+  const todayNames = topClusters.map((c) => c.name);
+
+  // Ask Haiku to match today's subjects with past subjects
+  const client = new Anthropic({ apiKey: config.anthropicApiKey });
+  const response = await client.messages.create({
+    model: MODEL,
+    max_tokens: 4096,
+    messages: [
+      {
+        role: "user",
+        content: `voici les sujets d'aujourd'hui :
+${todayNames.map((n, i) => `${i}: ${n}`).join("\n")}
+
+voici les sujets des jours précédents :
+${allPastNames.map((n, i) => `${i}: ${n}`).join("\n")}
+
+pour chaque sujet d'aujourd'hui, dis-moi s'il correspond à un sujet des jours précédents (même événement, même thème continu). réponds UNIQUEMENT en JSON brut (pas de markdown). un objet où chaque clé est le nom exact du sujet d'aujourd'hui et la valeur est le nom exact du sujet passé correspondant, ou null si c'est un sujet nouveau.`,
+      },
+    ],
+  });
+
+  const text =
+    response.content[0].type === "text" ? response.content[0].text : "";
+  const cleaned = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "");
+  const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+
+  let matches: Record<string, string | null> = {};
+  if (jsonMatch) {
+    try {
+      matches = JSON.parse(jsonMatch[0]);
+    } catch {
+      log("Failed to parse history matches");
+    }
+  }
+
+  // Compute streak and is_new for each cluster
+  for (const cluster of topClusters) {
+    const matchedPastName = matches[cluster.name];
+
+    if (!matchedPastName) {
+      // New subject
+      cluster.is_new = cluster.num_sources >= 5;
+      cluster.streak_days = 1;
+    } else {
+      // Find consecutive days this subject appeared
+      cluster.is_new = false;
+      let streak = 1;
+      for (const d of pastDates) {
+        const dayNames = pastData[d];
+        if (dayNames.includes(matchedPastName)) {
+          streak++;
+        } else {
+          break; // Streak broken
+        }
+      }
+      cluster.streak_days = streak;
+    }
+  }
+
+  // Log results
+  for (const c of topClusters.slice(0, 10)) {
+    const tags = [];
+    if (c.is_new) tags.push("🔺 nouveau");
+    if (c.streak_days && c.streak_days > 1) tags.push(`jour ${c.streak_days}`);
+    if (tags.length > 0) log(`  ${c.name} — ${tags.join(", ")}`);
+  }
+
+  return topClusters;
+}
+
 async function main(): Promise<void> {
   log("=== 5h07 pipeline start ===\n");
   const start = Date.now();
@@ -52,9 +183,12 @@ async function main(): Promise<void> {
   // 3. Multi-signal scoring (coverage + diversity + LLM + freshness)
   const scored = await runStep("3. scorer", () => score(clusters));
 
-  // Save top clusters to daily_digests for generator
+  // 4. Enrich with history (streak, is_new)
   const dateIso = new Date().toISOString().slice(0, 10);
-  const topClusters = serializeClusters(scored.filter((c) => c.score_final > 0).slice(0, 30));
+  let topClusters = serializeClusters(scored.filter((c) => c.score_final > 0).slice(0, 30));
+  topClusters = await runStep("4. history", () => enrichWithHistory(topClusters, dateIso));
+
+  // Save to daily_digests
   await supabase
     .from("daily_digests")
     .upsert({
@@ -63,11 +197,11 @@ async function main(): Promise<void> {
     }, { onConflict: "date" });
   log(`Saved ${topClusters.length} scored clusters to daily_digests`);
 
-  // 4. Summarize top articles + generate recaps
-  await runStep("4. summarizer", summarize);
+  // 5. Summarize top articles + generate recaps
+  await runStep("5. summarizer", summarize);
 
-  // 5. Generate static HTML site
-  await runStep("5. generator", generate);
+  // 6. Generate static HTML site
+  await runStep("6. generator", generate);
 
   const total = ((Date.now() - start) / 1000).toFixed(1);
   log(`=== pipeline complete in ${total}s ===`);

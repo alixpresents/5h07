@@ -66,7 +66,7 @@ async function fetchSources(): Promise<Map<string, SourceInfo>> {
 // Service public, spécialisé, régionale are excluded.
 export function normalizePolitical(o: string): string | null {
   o = o.toLowerCase();
-  if (o === "service public" || o === "specialise" || o === "regionale") return null;
+  if (o === "service public" || o === "specialise" || o === "regionale" || o === "autre") return null;
   if (o.includes("gauche")) return "gauche";
   if (o.includes("droite")) return "droite";
   return "centre";

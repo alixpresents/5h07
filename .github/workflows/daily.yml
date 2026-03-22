@@ -36,6 +36,8 @@ jobs:
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          NEWSAPI_KEY: ${{ secrets.NEWSAPI_KEY }}
+          NEWSCATCHER_KEY: ${{ secrets.NEWSCATCHER_KEY }}
         run: node build/pipeline.js
 
       - name: Commit and push dist/

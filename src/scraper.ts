@@ -24,6 +24,65 @@ function stripHtml(html: string | undefined): string | null {
   return html.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
 }
 
+// ─── Source matching ────────────────────────────────
+
+let sourceNameMap: Map<string, string> | null = null;
+
+async function getSourceNameMap(): Promise<Map<string, string>> {
+  if (sourceNameMap) return sourceNameMap;
+  const { data } = await supabase.from("sources").select("id, name").eq("active", true);
+  sourceNameMap = new Map<string, string>();
+  for (const s of data ?? []) {
+    sourceNameMap.set(s.name.toLowerCase(), s.id);
+  }
+  return sourceNameMap;
+}
+
+async function matchSourceId(publisherName: string): Promise<string | null> {
+  const map = await getSourceNameMap();
+  const lower = publisherName.toLowerCase().trim();
+
+  // Direct match
+  if (map.has(lower)) return map.get(lower)!;
+
+  // Fuzzy: check if publisher contains or is contained by a known source
+  for (const [name, id] of map) {
+    if (lower.includes(name) || name.includes(lower)) return id;
+  }
+  return null;
+}
+
+// ─── Fallback source for unmatched articles ─────────
+
+let fallbackSourceId: string | null = null;
+
+async function getFallbackSourceId(): Promise<string> {
+  if (fallbackSourceId) return fallbackSourceId;
+
+  // Get or create an "Autre" source
+  const { data: existing } = await supabase
+    .from("sources")
+    .select("id")
+    .eq("name", "Autre")
+    .single();
+
+  if (existing) {
+    fallbackSourceId = existing.id as string;
+    return fallbackSourceId;
+  }
+
+  const { data: created } = await supabase
+    .from("sources")
+    .insert({ name: "Autre", rss_url: "", orientation: "autre", category: "autre", active: false })
+    .select("id")
+    .single();
+
+  fallbackSourceId = created!.id as string;
+  return fallbackSourceId;
+}
+
+// ─── RSS feed scraping ──────────────────────────────
+
 async function fetchSources(): Promise<Source[]> {
   const { data, error } = await supabase
     .from("sources")
@@ -68,7 +127,6 @@ async function fetchFeed(source: Source): Promise<RawArticle[]> {
 async function insertArticles(articles: RawArticle[]): Promise<number> {
   if (articles.length === 0) return 0;
 
-  // Batch insert, ignore duplicates (url is UNIQUE)
   const { data, error } = await supabase
     .from("articles")
     .upsert(articles, { onConflict: "url", ignoreDuplicates: true })
@@ -78,20 +136,186 @@ async function insertArticles(articles: RawArticle[]): Promise<number> {
   return data?.length ?? 0;
 }
 
-export async function scrape(): Promise<void> {
-  log("Starting RSS scrape...");
+// ─── Google News RSS ────────────────────────────────
 
-  const sources = await fetchSources();
-  log(`Found ${sources.length} active sources`);
+const GOOGLE_NEWS_FEEDS = [
+  { name: "Google News France", url: "https://news.google.com/rss?hl=fr&gl=FR&ceid=FR:fr" },
+  { name: "Google News Politique", url: "https://news.google.com/rss/topics/CAAqJQgKIh9DQkFTRVFvSUwyMHZNRGx1YlY4U0JHWnlMVUlvQUFQAQ?hl=fr&gl=FR&ceid=FR:fr" },
+  { name: "Google News Économie", url: "https://news.google.com/rss/topics/CAAqKggKIiRDQkFTRlFvSUwyMHZNRGx6TVdZU0JHWnlMVUlLQUFQAQ?hl=fr&gl=FR&ceid=FR:fr" },
+  { name: "Google News Science/Tech", url: "https://news.google.com/rss/topics/CAAqKggKIiRDQkFTRlFvSUwyMHZNRGRqTVhZU0JHWnlMVUlLQUFQAQ?hl=fr&gl=FR&ceid=FR:fr" },
+  { name: "Google News Santé", url: "https://news.google.com/rss/topics/CAAqJQgKIh9DQkFTRVFvSUwyMHZNR3QwTlRFU0JHWnlMVUlvQUFQAQ?hl=fr&gl=FR&ceid=FR:fr" },
+];
 
-  let totalNew = 0;
+async function scrapeGoogleNews(): Promise<{ fetched: number; inserted: number }> {
+  const parser = new Parser({
+    timeout: 15_000,
+    headers: { "User-Agent": "5h07-bot/1.0" },
+    customFields: { item: [["source", "source"]] },
+  });
+
+  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
   let totalFetched = 0;
+  let totalInserted = 0;
+
+  for (const gfeed of GOOGLE_NEWS_FEEDS) {
+    try {
+      const feed = await parser.parseURL(gfeed.url);
+      const articles: RawArticle[] = [];
+
+      for (const item of feed.items) {
+        if (!item.link || !item.title) continue;
+        const pubDate = item.pubDate ? new Date(item.pubDate) : null;
+        if (pubDate && pubDate < cutoff) continue;
+
+        // Extract real source name from <source> tag
+        const publisherName = (item as unknown as Record<string, unknown>).source as string | undefined;
+        const sourceId = publisherName ? await matchSourceId(publisherName) : null;
+        const finalSourceId = sourceId ?? await getFallbackSourceId();
+
+        articles.push({
+          source_id: finalSourceId,
+          title: item.title.trim(),
+          description: stripHtml(item.contentSnippet || item.content || item.summary),
+          url: item.link.trim(),
+          published_at: pubDate?.toISOString() ?? null,
+        });
+      }
+
+      totalFetched += articles.length;
+      if (articles.length > 0) {
+        const inserted = await insertArticles(articles);
+        totalInserted += inserted;
+        log(`✓ ${gfeed.name}: ${articles.length} articles, ${inserted} new`);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log(`✗ ${gfeed.name}: FAILED — ${msg}`);
+    }
+  }
+
+  return { fetched: totalFetched, inserted: totalInserted };
+}
+
+// ─── NewsAPI ────────────────────────────────────────
+
+async function scrapeNewsAPI(): Promise<{ fetched: number; inserted: number }> {
+  const apiKey = process.env.NEWSAPI_KEY;
+  if (!apiKey) {
+    log("⊘ NewsAPI: no API key, skipping");
+    return { fetched: 0, inserted: 0 };
+  }
+
+  try {
+    const resp = await fetch(
+      `https://newsapi.org/v2/top-headlines?country=fr&pageSize=100&apiKey=${apiKey}`
+    );
+    if (!resp.ok) {
+      log(`✗ NewsAPI: HTTP ${resp.status}`);
+      return { fetched: 0, inserted: 0 };
+    }
+
+    const json = await resp.json() as {
+      articles: { title: string; url: string; description: string | null; publishedAt: string; source: { name: string } }[];
+    };
+
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const articles: RawArticle[] = [];
+
+    for (const item of json.articles ?? []) {
+      if (!item.url || !item.title || item.title === "[Removed]") continue;
+      const pubDate = item.publishedAt ? new Date(item.publishedAt) : null;
+      if (pubDate && pubDate < cutoff) continue;
+
+      const sourceId = await matchSourceId(item.source.name);
+      const finalSourceId = sourceId ?? await getFallbackSourceId();
+
+      articles.push({
+        source_id: finalSourceId,
+        title: item.title.trim(),
+        description: item.description?.trim() ?? null,
+        url: item.url.trim(),
+        published_at: pubDate?.toISOString() ?? null,
+      });
+    }
+
+    const inserted = await insertArticles(articles);
+    log(`✓ NewsAPI: ${articles.length} articles, ${inserted} new`);
+    return { fetched: articles.length, inserted };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    log(`✗ NewsAPI: FAILED — ${msg}`);
+    return { fetched: 0, inserted: 0 };
+  }
+}
+
+// ─── Newscatcher API ────────────────────────────────
+
+async function scrapeNewscatcher(): Promise<{ fetched: number; inserted: number }> {
+  const apiKey = process.env.NEWSCATCHER_KEY;
+  if (!apiKey) {
+    log("⊘ Newscatcher: no API key, skipping");
+    return { fetched: 0, inserted: 0 };
+  }
+
+  try {
+    const resp = await fetch(
+      "https://api.newscatcherapi.com/v2/latest_headlines?lang=fr&countries=FR&page_size=100",
+      { headers: { "x-api-key": apiKey } }
+    );
+    if (!resp.ok) {
+      log(`✗ Newscatcher: HTTP ${resp.status}`);
+      return { fetched: 0, inserted: 0 };
+    }
+
+    const json = await resp.json() as {
+      articles: { title: string; link: string; summary: string | null; published_date: string; rights: string }[];
+    };
+
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const articles: RawArticle[] = [];
+
+    for (const item of json.articles ?? []) {
+      if (!item.link || !item.title) continue;
+      const pubDate = item.published_date ? new Date(item.published_date) : null;
+      if (pubDate && pubDate < cutoff) continue;
+
+      const sourceId = item.rights ? await matchSourceId(item.rights) : null;
+      const finalSourceId = sourceId ?? await getFallbackSourceId();
+
+      articles.push({
+        source_id: finalSourceId,
+        title: item.title.trim(),
+        description: item.summary?.trim() ?? null,
+        url: item.link.trim(),
+        published_at: pubDate?.toISOString() ?? null,
+      });
+    }
+
+    const inserted = await insertArticles(articles);
+    log(`✓ Newscatcher: ${articles.length} articles, ${inserted} new`);
+    return { fetched: articles.length, inserted };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    log(`✗ Newscatcher: FAILED — ${msg}`);
+    return { fetched: 0, inserted: 0 };
+  }
+}
+
+// ─── Main scrape function ───────────────────────────
+
+export async function scrape(): Promise<void> {
+  log("Starting scrape...");
+  let totalFetched = 0;
+  let totalNew = 0;
+
+  // 1. RSS sources (the core ~50 with orientations)
+  const sources = await fetchSources();
+  log(`Found ${sources.length} RSS sources`);
 
   for (const source of sources) {
     try {
       const articles = await fetchFeed(source);
       totalFetched += articles.length;
-
       if (articles.length > 0) {
         const inserted = await insertArticles(articles);
         totalNew += inserted;
@@ -105,7 +329,27 @@ export async function scrape(): Promise<void> {
     }
   }
 
-  log(`Done. ${totalFetched} articles fetched, ${totalNew} new inserted.`);
+  log(`RSS done: ${totalFetched} fetched, ${totalNew} new`);
+
+  // 2. Google News RSS
+  log("--- Google News ---");
+  const gn = await scrapeGoogleNews();
+  totalFetched += gn.fetched;
+  totalNew += gn.inserted;
+
+  // 3. NewsAPI
+  log("--- NewsAPI ---");
+  const na = await scrapeNewsAPI();
+  totalFetched += na.fetched;
+  totalNew += na.inserted;
+
+  // 4. Newscatcher
+  log("--- Newscatcher ---");
+  const nc = await scrapeNewscatcher();
+  totalFetched += nc.fetched;
+  totalNew += nc.inserted;
+
+  log(`Done. Total: ${totalFetched} articles fetched, ${totalNew} new inserted.`);
 }
 
 // Run directly

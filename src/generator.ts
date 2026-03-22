@@ -29,6 +29,8 @@ interface SerializedCluster {
   score_fraicheur: number;
   score_final: number;
   num_sources: number;
+  is_new?: boolean;
+  streak_days?: number;
 }
 
 interface BlindSpot {
@@ -183,8 +185,11 @@ function buildClusterSection(clusters: SerializedCluster[]): string {
     const sourceList = shown.map((s) => escapeHtml(s)).join(" · ") + (rest > 0 ? ` · [+${rest}]` : "");
 
     const name = c.name.toLowerCase();
-    const pad = Math.max(38 - name.length - 4, 2);
-    const header = `── ${name} ${"─".repeat(pad)}`;
+    const streak = (c.streak_days && c.streak_days > 1) ? ` · jour ${c.streak_days}` : "";
+    const newTag = c.is_new ? "🔺 " : "";
+    const label = `${newTag}${name}${streak}`;
+    const pad = Math.max(38 - label.length - 4, 2);
+    const header = `── ${label} ${"─".repeat(pad)}`;
 
     return `<pre class="cluster-header">${header}</pre>
 <pre class="cluster-data">  couverture : [${bar}] ${c.num_sources} sources

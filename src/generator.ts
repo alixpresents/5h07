@@ -1,4 +1,4 @@
-import { writeFileSync, mkdirSync } from "fs";
+import { writeFileSync, mkdirSync, readdirSync } from "fs";
 import path from "path";
 import Anthropic from "@anthropic-ai/sdk";
 import { config } from "./config.js";
@@ -93,15 +93,17 @@ async function fetchTopArticles(limit = 10): Promise<DigestArticle[]> {
   return result;
 }
 
-async function fetchPastDates(): Promise<string[]> {
-  const { data, error } = await supabase
-    .from("daily_digests")
-    .select("date")
-    .order("date", { ascending: false })
-    .limit(30);
-
-  if (error || !data) return [];
-  return data.map((d) => d.date as string);
+function scanArchiveDates(distDir: string): string[] {
+  try {
+    const files = readdirSync(distDir);
+    return files
+      .filter((f) => /^\d{4}-\d{2}-\d{2}\.html$/.test(f))
+      .map((f) => f.replace(".html", ""))
+      .sort()
+      .reverse();
+  } catch {
+    return [];
+  }
 }
 
 function escapeHtml(text: string): string {
@@ -275,7 +277,8 @@ function buildPage(
   recaps: Record<string, string>,
   barometer: MoodBarometer,
   clusters: SerializedCluster[],
-  quiz: QuizQuestion[]
+  quiz: QuizQuestion[],
+  yesterdayMood: number | null
 ): string {
   const dateFr = formatDateFr(date);
   const dateIso = toISODate(date);
@@ -284,22 +287,12 @@ function buildPage(
     .map((a) => `<a href="${escapeHtml(a.url)}" target="_blank" rel="noopener">${escapeHtml(a.source_name)}</a>`)
     .join(" · ");
 
-  const pastLinks = pastDates
-    .filter((d) => d !== dateIso)
-    .slice(0, 14)
-    .map((d) => {
-      const label = new Date(d + "T12:00:00").toLocaleDateString("fr-FR", {
-        weekday: "short",
-        day: "numeric",
-        month: "short",
-      });
-      return `<a href="${d}.html">${label}</a>`;
-    })
-    .join(" | ");
-
-  const pastSection =
-    pastLinks.length > 0
-      ? `<pre class="dim">jours précédents : ${pastLinks}</pre>`
+  const archiveDates = pastDates.filter((d) => d !== dateIso);
+  const archiveSection =
+    archiveDates.length > 0
+      ? `<pre class="sep">────────────────────────────────────────</pre>
+<pre class="section-title">archives</pre>
+<pre class="dim">  ${archiveDates.map((d) => `<a href="${d}.html">${d}</a>`).join(" · ")}</pre>`
       : "";
 
   const filled = Math.round(barometer.mood / 100 * 20);
@@ -367,7 +360,7 @@ pas de pub, pas d'éditorial, juste les faits.
 <pre class="sep">════════════════════════════════════════</pre>
 <pre>${escapeHtml(dateFr)}</pre>
 <div class="baro">
-<pre>  mood : [${moodBar}] ${barometer.mood}/100 ${barometer.emoji}</pre>
+<pre>  mood : [${moodBar}] ${barometer.mood}/100 ${barometer.emoji}${yesterdayMood !== null ? (() => { const diff = barometer.mood - yesterdayMood; const abs = Math.abs(diff); if (abs < 5) return ' <span style="color:#999">▸ ' + (diff >= 0 ? '+' : '') + diff + '</span>'; if (diff > 0) return ' <span style="color:#2a7d2a">▲ +' + diff + '</span>'; return ' <span style="color:#c0392b">▼ ' + diff + '</span>'; })() : ''}</pre>
 </div>
 <div class="recap">
 ${recapToHtml(recaps["principal"] ?? "")}
@@ -377,7 +370,7 @@ ${clusterSection}
 ${blindSpotsSection}
 <pre class="sep">────────────────────────────────────────</pre>
 <div class="sources">sources : ${sourceLinks}</div>
-${pastSection}
+${archiveSection}
 <pre class="sep">════════════════════════════════════════</pre>
 <pre class="dim">
   cette page pèse ~${Math.round(recapToHtml(recaps["principal"] ?? "").length / 100 + 10)} ko
@@ -455,7 +448,7 @@ export async function generate(): Promise<void> {
     return;
   }
 
-  const pastDates = await fetchPastDates();
+  const pastDates = scanArchiveDates(distDir);
 
   // Check cache
   const { data: existing } = await supabase
@@ -511,12 +504,26 @@ export async function generate(): Promise<void> {
       article_ids: { urls: articles.map((a) => a.url), recaps, barometer, quiz, clusters },
     }, { onConflict: "date" });
 
+  // Fetch yesterday's mood for trend arrow
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayIso = toISODate(yesterday);
+  const { data: yData } = await supabase
+    .from("daily_digests")
+    .select("article_ids")
+    .eq("date", yesterdayIso)
+    .single();
+  const yesterdayMood: number | null = (yData?.article_ids as CachedData | null)?.barometer?.mood ?? null;
+  if (yesterdayMood !== null) {
+    log(`Yesterday's mood: ${yesterdayMood}/100, today: ${barometer.mood}/100 (${barometer.mood - yesterdayMood >= 0 ? "+" : ""}${barometer.mood - yesterdayMood})`);
+  }
+
   // Generate pages
-  const indexHtml = buildPage(articles, now, pastDates, recaps, barometer, clusters, quiz);
+  const indexHtml = buildPage(articles, now, pastDates, recaps, barometer, clusters, quiz, yesterdayMood);
   writeFileSync(path.join(distDir, "index.html"), indexHtml, "utf-8");
   log("✓ dist/index.html");
 
-  const datePage = buildPage(articles, now, pastDates, recaps, barometer, clusters, quiz);
+  const datePage = buildPage(articles, now, pastDates, recaps, barometer, clusters, quiz, yesterdayMood);
   writeFileSync(path.join(distDir, `${dateIso}.html`), datePage, "utf-8");
   log(`✓ dist/${dateIso}.html`);
 

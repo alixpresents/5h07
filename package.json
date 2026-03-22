@@ -1,0 +1,25 @@
+{
+  "name": "5h07",
+  "version": "1.0.0",
+  "description": "L'essentiel de l'actu française, chaque matin à 5h07",
+  "main": "build/pipeline.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "tsc && node build/pipeline.js",
+    "pipeline": "node build/pipeline.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.80.0",
+    "@supabase/supabase-js": "^2.99.3",
+    "dotenv": "^17.3.1",
+    "rss-parser": "^3.13.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "typescript": "^5.9.3"
+  }
+}

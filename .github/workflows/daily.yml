@@ -1,0 +1,46 @@
+name: 5h07 daily pipeline
+
+on:
+  schedule:
+    # 3h07 UTC = 5h07 CET (heure d'hiver) / 5h07 CEST (heure d'été = 3h07 UTC+2, donc 3h07 UTC en été c'est 5h07 CEST)
+    # Note: en heure d'hiver (CET = UTC+1), 3h07 UTC = 4h07 CET. Pour 5h07 CET en hiver, il faudrait 4h07 UTC.
+    # On garde 3h07 UTC = 5h07 CEST (mars-octobre). Ajuster si besoin.
+    - cron: '7 3 * * *'
+  workflow_dispatch: # permet de lancer manuellement
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build TypeScript
+        run: npm run build
+
+      - name: Run pipeline
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: node build/pipeline.js
+
+      - name: Commit and push dist/
+        run: |
+          git config user.name "5h07-bot"
+          git config user.email "bot@5h07.fr"
+          git add -f dist/
+          git diff --cached --quiet && echo "No changes to commit" && exit 0
+          git commit -m "$(date -u +%Y-%m-%d) — récap du jour"
+          git push

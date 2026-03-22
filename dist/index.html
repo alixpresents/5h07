@@ -14,15 +14,22 @@ a{color:#0057b7;}
 .sep{color:#999;margin:1.2em 0;overflow:hidden;}
 .about{font-size:0.82em;color:#888;border-left:2px solid #ddd;padding-left:1em;margin:1em 0 1.5em;}
 .baro{font-size:0.9em;margin:0.8em 0 1.5em;color:#555;}
-.recap p{margin-bottom:0.8em;}
-.section-title{font-weight:bold;margin-bottom:0.6em;color:#333;}
-.cluster-header{color:#555;margin-top:0.8em;}
-.cluster-data{font-size:0.85em;color:#666;margin-bottom:0.3em;}
+.recap p{margin-bottom:0.8em;text-align:justify;}
+.section-title{font-weight:bold;margin-bottom:0.6em;color:#999;font-size:0.78em;}
+.cluster-header{color:#999;margin-top:0.6em;font-size:0.75em;}
+.cluster-data{font-size:0.72em;color:#aaa;margin-bottom:0.2em;}
 .sources{font-size:0.78em;color:#999;margin-top:2em;}
 .sources a{color:#999;}
 .footer{font-size:0.78em;color:#bbb;margin-top:1em;}
 .tip{cursor:pointer;color:#888;font-size:0.75em;margin-left:1px;position:relative;}
 .tip-text{display:none;position:absolute;bottom:1.5em;left:0;background:#FFFCF0;border:1px solid #000;padding:0.4em 0.6em;font-size:1.35em;max-width:300px;width:max-content;z-index:10;line-height:1.4;font-style:normal;font-weight:normal;}
+.quiz-q{margin-top:0.8em;color:#333;}
+.quiz-opts{margin:0.3em 0 0.5em 1.5em;}
+.quiz-opt{display:block;cursor:pointer;padding:0.15em 0;font-family:inherit;font-size:inherit;}
+.quiz-opt.correct{color:#2a7d2a;}
+.quiz-opt.wrong{color:#c0392b;text-decoration:line-through;}
+.quiz-opt.reveal{color:#2a7d2a;}
+.quiz-score{margin-top:0.8em;color:#555;}
 .dim{font-size:0.82em;color:#999;}
 .dim a{color:#999;}
 </style>
@@ -36,48 +43,65 @@ a{color:#0057b7;}
 |____/|_|  \___/ /_/
 </pre>
 <div class="about">
-chaque matin, une ia lit ~50 sources de presse française — de
-libération à valeurs actuelles, de mediapart au figaro — et croise
-leurs couvertures. le score de chaque sujet ne vient pas d'un
-algorithme opaque : il combine le nombre de médias qui en parlent,
-la diversité politique de la couverture, et l'ampleur de l'événement.
-si la gauche et la droite couvrent le même sujet, c'est probablement
-important. si un seul camp en parle, ça mérite d'être signalé aussi.
-5h07 ne résume pas juste l'actu. il montre comment elle est fabriquée.
+chaque matin, une ia lit ~50 sources françaises et trie ce qui
+compte par couverture, diversité politique et ampleur. pas de pub,
+pas de clics, pas d'éditorial.
 </div>
 <pre class="sep">════════════════════════════════════════</pre>
 <pre>dimanche 22 mars 2026</pre>
 <div class="baro">
-<pre>  mood : [██████░░░░░░░░░░░░░░] 28/100 ⛈️</pre>
+<pre>  mood : [██████░░░░░░░░░░░░░░] 28/100 😰</pre>
 </div>
 <div class="recap">
-<p><strong>Édouard Philippe consolide sa base électorale</strong></p>
+<p><strong>Philippe réélu au Havre.</strong> L'ancien Premier ministre remporte son élection municipale avec près de 48% des voix. C'est sa base politique depuis des années, et ça consolide sa position avant 2027 – les municipales, c'est toujours un test pour voir qui peut compter sur ses électeurs locaux.</p>
 
-<p>L'ancien Premier ministre remporte confortablement sa réélection au Havre avec 47% des voix. C'est pas anodin : Philippe construit tranquillement sa stature avant 2027, et une mairie bien tenue, c'est de la crédibilité. Ça montre surtout que même après le passage à Matignon, il garde une assise locale solide. Les municipales, c'est moins spectaculaire que les présidentielles, mais c'est le terrain où on gagne.</p>
+<p><strong>L'Iran rate ses missiles.</strong> Selon les Britanniques, deux missiles lancés par Téhéran vers la base militaire anglo-américaine de Diego Garcia dans l'océan Indien ont échoué ou été interceptés. C'est confirmé : l'Iran visait bien cette installation clé, et l'escalade au Moyen-Orient ne rigole pas avec les infrastructures stratégiques.</p>
 
-<p><strong>Situation tendue au Moyen-Orient, ressources énergétiques visées</strong></p>
+<p><strong>L'eau devient une arme.</strong> Les bombardements ciblent maintenant les usines de désalinisation <sup class="tip" onclick="toggleTip(this)">i<span class="tip-text">processus qui transforme l'eau salée en eau douce</span></sup> en Iran et dans le Golfe. Ce n'est pas un détail : les civils perdent accès à l'eau potable. C'est du lourd comme arme de guerre, et ça rappelle que certaines ressources deviennent des enjeux de survie.</p>
 
-<p>L'Iran a tiré deux missiles vers Diego Garcia (une base militaire britannique et américaine dans l'océan Indien), ils ont raté ou ont été interceptés. En parallèle, les tensions s'intensifient : Trump pousse l'Iran à laisser passer le pétrole par le détroit d'Ormuz <sup class="tip" onclick="toggleTip(this)">i<span class="tip-text">passage maritime crucial pour le commerce pétrolier mondial</span></sup>, Israël bombarde le Liban, et les deux camps menacent de s'en prendre aux infrastructures énergétiques. C'est du lourd parce que ça touche directement à l'énergie mondiale. Les prix du pétrole et du gaz montent, et chez nous, les écologistes s'arrachent les cheveux parce que le gouvernement refuse de parler de sobriété énergétique comme solution.</p>
+<p><strong>Trump met la pression sur l'Iran.</strong> L'ancien président américain adresse un ultimatum à Téhéran sur le détroit d'Ormuz <sup class="tip" onclick="toggleTip(this)">i<span class="tip-text">passage maritime crucial par lequel transite 30% du pétrole mondial</span></sup>, tandis qu'Israël bombarde un pont stratégique au sud du Liban. L'Iran riposte en menaçant les installations énergétiques de ses adversaires. Là c'est l'escalade qui s'accélère.</p>
 
-<p>Autre détail inquiétant : l'eau potable devient une cible militaire. Les désalinisateurs en Iran et dans le Golfe sont bombardés. On parle pas juste de géopolitique là, on parle d'une ressource vitale.</p>
+<p><strong>Les prix de l'énergie montent.</strong> Pétrole et gaz flambent à cause du conflit. Mais le gouvernement français ignore la vraie question, celle de la sobriété énergétique – utiliser moins d'énergie, tout simplement. Les associations écologistes le pointent : c'est la faille dans notre stratégie de souveraineté énergétique.</p>
 
-<p><strong>Italie : un référendum sur la justice qui en dit long</strong></p>
+<p><strong>Référendum en Italie.</strong> Les Italiens votent dimanche et lundi sur une réforme du système judiciaire proposée par Giorgia Meloni. Ça cristallise les tensions : la droite y voit un enjeu civilisationnel, la gauche dénonce un affaiblissement de la justice. C'est un test politique majeur avant 2027.</p>
 
-<p>Les Italiens votent sur la réforme du système judiciaire voulue par Giorgia Meloni. C'est un test politique avant les législatives de 2027, et le résultat est incertain. La droite-extrême droite face à une gauche critique.</p>
+<p><strong>L'OTAN en Ukraine.</strong> Une délégation de haut niveau, conduite par l'amiral français Pierre Vandier, s'est rendue en Ukraine pour la première fois depuis l'invasion. Signal d'un engagement militaire accru de l'alliance atlantique.</p>
 
-<p><strong>Ukraine : première visite de haut niveau de l'OTAN</strong></p>
+<p><strong>Disparition en Aveyron.</strong> Une mère et son fils de 13 ans ont disparu vendredi. Trente gendarmes, drones, hélicoptère et équipes cynophiles mobilisés. Le père et sa compagne sont introuvables et considérés comme suspects – trois jours que ça dure.</p>
 
-<p>L'amiral français Pierre Vandier dirige une délégation de l'OTAN en Ukraine. C'est symboliquement important : montre un engagement de l'OTAN plutôt qu'une mise à distance.</p>
+<p><strong>Payet tire sa révérence.</strong> Dimitri Payet, figure de la Ligue 1 avec 492 matchs et record de passes décisives (106), annonce la fin de sa carrière à 38 ans. Une belle page qui se tourne.</p>
 
-<p><strong>France : recherches intensives en Aveyron</strong></p>
+<p><strong>Participation stable.</strong> 57% aux municipales – moins qu'en 2014, mais plus qu'en 2020 avec le covid. Les Français se déplacent toujours pour les locales, mais sans enthousiasme débordant.</p>
 
-<p>Une mère et son fils de 13 ans disparus depuis vendredi. Trente gendarmes et un hélicoptère mobilisés. Le père et sa compagne sont suspects.</p>
-
-<p><strong>Politique et football</strong></p>
-
-<p>La participation aux municipales tombe à 57%, moins qu'en 2014. Et Dimitri Payet range les crampons à 38 ans après une belle carrière à la Ligue 1.</p>
-
-<p>Dimanche dense : des élections qui consolidaient des positions, des tensions énergétiques qui montent d'un cran au Moyen-Orient, et une France qui continue son rythme politique habituel.</p>
+<p>En résumé : escalade militaire au Moyen-Orient, l'eau devient une arme, l'énergie s'envole, et les petites guerres politiques continuent tranquille en Europe.</p>
+</div>
+<pre class="dim" style="margin-top:1.5em"><a href="#" onclick="var q=document.getElementById('quiz');q.style.display=q.style.display==='none'?'block':'none';return false">[t'as suivi ?]</a></pre>
+<div id="quiz" style="display:none">
+<pre class="quiz-q">1. Quel pourcentage de voix Philippe a-t-il obtenu à son élection municipale au Havre ?</pre>
+<div class="quiz-opts">
+<label class="quiz-opt" data-q="0" data-o="0" onclick="checkAnswer(this,0,0,0)"><input type="radio" name="q0"> Près de 48%</label>
+<label class="quiz-opt" data-q="0" data-o="1" onclick="checkAnswer(this,0,1,0)"><input type="radio" name="q0"> Près de 52%</label>
+<label class="quiz-opt" data-q="0" data-o="2" onclick="checkAnswer(this,0,2,0)"><input type="radio" name="q0"> Près de 45%</label>
+</div>
+<pre class="quiz-q">2. Selon les Britanniques, combien de missiles lancés par l'Iran vers Diego Garcia ont échoué ou été interceptés ?</pre>
+<div class="quiz-opts">
+<label class="quiz-opt" data-q="1" data-o="0" onclick="checkAnswer(this,1,0,1)"><input type="radio" name="q1"> Un missile</label>
+<label class="quiz-opt" data-q="1" data-o="1" onclick="checkAnswer(this,1,1,1)"><input type="radio" name="q1"> Deux missiles</label>
+<label class="quiz-opt" data-q="1" data-o="2" onclick="checkAnswer(this,1,2,1)"><input type="radio" name="q1"> Trois missiles</label>
+</div>
+<pre class="quiz-q">3. Quel pourcentage du pétrole mondial transite par le détroit d'Ormuz ?</pre>
+<div class="quiz-opts">
+<label class="quiz-opt" data-q="2" data-o="0" onclick="checkAnswer(this,2,0,1)"><input type="radio" name="q2"> 20%</label>
+<label class="quiz-opt" data-q="2" data-o="1" onclick="checkAnswer(this,2,1,1)"><input type="radio" name="q2"> 30%</label>
+<label class="quiz-opt" data-q="2" data-o="2" onclick="checkAnswer(this,2,2,1)"><input type="radio" name="q2"> 40%</label>
+</div>
+<pre class="quiz-q">4. Quel est le record de passes décisives de Dimitri Payet en Ligue 1 ?</pre>
+<div class="quiz-opts">
+<label class="quiz-opt" data-q="3" data-o="0" onclick="checkAnswer(this,3,0,1)"><input type="radio" name="q3"> 98 passes décisives</label>
+<label class="quiz-opt" data-q="3" data-o="1" onclick="checkAnswer(this,3,1,1)"><input type="radio" name="q3"> 106 passes décisives</label>
+<label class="quiz-opt" data-q="3" data-o="2" onclick="checkAnswer(this,3,2,1)"><input type="radio" name="q3"> 112 passes décisives</label>
+</div>
+<pre class="quiz-score" id="quiz-score"></pre>
 </div>
 <pre class="sep">────────────────────────────────────────</pre>
 <pre class="section-title">pourquoi ces sujets</pre>
@@ -137,7 +161,7 @@ important. si un seul camp en parle, ça mérite d'être signalé aussi.
 
 <pre class="sep">════════════════════════════════════════</pre>
 <pre class="dim">
-  cette page pèse ~37 ko
+  cette page pèse ~44 ko
   0 tracker · 0 pub · 0 cookie · 0 image
   oui, une ia lit 800+ articles chaque matin
   c'est toujours moins que vous sur 50 sites
@@ -147,6 +171,26 @@ important. si un seul camp en parle, ça mérite d'être signalé aussi.
 function toggleTip(el){var t=el.querySelector('.tip-text');if(!t)return;var open=t.style.display==='block';closeAllTips();if(!open)t.style.display='block';}
 function closeAllTips(){var a=document.querySelectorAll('.tip-text');for(var i=0;i<a.length;i++)a[i].style.display='none';}
 document.addEventListener('click',function(e){if(!e.target.closest('.tip'))closeAllTips();});
+var quizDone={};var quizTotal=4;
+function checkAnswer(el,q,picked,correct){
+  if(quizDone[q])return;quizDone[q]=true;
+  var opts=document.querySelectorAll('[data-q="'+q+'"]');
+  for(var i=0;i<opts.length;i++){
+    if(parseInt(opts[i].dataset.o)===correct)opts[i].classList.add(picked===correct?'correct':'reveal');
+    if(parseInt(opts[i].dataset.o)===picked&&picked!==correct)opts[i].classList.add('wrong');
+    opts[i].style.pointerEvents='none';
+  }
+  if(picked===correct)el.innerHTML='✓ '+el.textContent.trim();
+  else el.innerHTML='✗ '+el.textContent.trim();
+  var done=Object.keys(quizDone).length;
+  if(done===quizTotal){
+    var right=0;for(var k in quizDone)if(quizDone[k])right++;
+    // recount correct
+    right=document.querySelectorAll('.quiz-opt.correct').length;
+    var msg=right===4?"t'es chaud":right>=3?"pas mal":right>=2?"moyen":"relis le récap";
+    document.getElementById('quiz-score').textContent=right+'/'+quizTotal+' — '+msg;
+  }
+}
 </script>
 </body>
 </html>

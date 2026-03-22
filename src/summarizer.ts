@@ -26,6 +26,7 @@ les règles :
 - sois neutre sur les faits, humain dans le ton
 - pas de jargon politique, pas de 'notons que', pas de 'il convient de', pas de 'dans un contexte de'
 - des paragraphes courts, 2-4 phrases max
+- chaque paragraphe commence par un titre de 2-5 mots en gras (<strong>titre</strong>) qui résume le sujet, suivi du texte. exemples : <strong>Philippe réélu au Havre.</strong>, <strong>Ormuz au bord de la fermeture.</strong>, <strong>L'eau, arme de guerre.</strong>
 - commence direct par le sujet le plus important
 - finis par une phrase courte qui donne le ton de la journée
 
@@ -231,6 +232,45 @@ ${eventsText}`,
     return { mood: 50, emoji: "☁️", meteo: "couvert", phrase: "journée inclassable" };
   }
   return JSON.parse(jsonMatch[0]);
+}
+
+export interface QuizQuestion {
+  question: string;
+  options: string[];
+  answer: number;
+}
+
+export async function generateQuiz(
+  client: Anthropic,
+  recap: string
+): Promise<QuizQuestion[]> {
+  const response = await client.messages.create({
+    model: MODEL,
+    max_tokens: 2048,
+    messages: [
+      {
+        role: "user",
+        content: `à partir de ce récap d'actualité, génère exactement 4 questions à choix multiples pour tester si le lecteur a retenu les infos clés. chaque question a 3 options dont une seule est correcte. les questions doivent porter sur des faits précis du récap, pas des opinions. réponds UNIQUEMENT en JSON brut (pas de markdown) : un tableau d'objets avec 'question', 'options' (tableau de 3 strings), 'answer' (index 0-2 de la bonne réponse).
+
+Récap :
+
+${recap}`,
+      },
+    ],
+  });
+
+  const text =
+    response.content[0].type === "text" ? response.content[0].text : "";
+  const cleaned = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
+  const jsonMatch = cleaned.match(/\[[\s\S]*\]/);
+  if (!jsonMatch) {
+    return [];
+  }
+  try {
+    return JSON.parse(jsonMatch[0]);
+  } catch {
+    return [];
+  }
 }
 
 export async function generateAllRecaps(

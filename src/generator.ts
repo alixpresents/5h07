@@ -3,8 +3,8 @@ import path from "path";
 import Anthropic from "@anthropic-ai/sdk";
 import { config } from "./config.js";
 import { supabase } from "./db.js";
-import { generateAllRecaps, generateMoodBarometer } from "./summarizer.js";
-import type { MoodBarometer } from "./summarizer.js";
+import { generateAllRecaps, generateMoodBarometer, generateQuiz } from "./summarizer.js";
+import type { MoodBarometer, QuizQuestion } from "./summarizer.js";
 
 interface DigestArticle {
   title: string;
@@ -41,6 +41,7 @@ interface BlindSpot {
 interface CachedData {
   recaps?: Record<string, string>;
   barometer?: MoodBarometer;
+  quiz?: QuizQuestion[];
   clusters?: SerializedCluster[];
 }
 
@@ -139,6 +140,27 @@ function recapToHtml(recap: string): string {
 function asciiBar(value: number, max: number, width = 20): string {
   const filled = Math.round((value / max) * width);
   return "█".repeat(Math.min(filled, width)) + "░".repeat(Math.max(width - filled, 0));
+}
+
+function buildQuizSection(quiz: QuizQuestion[]): string {
+  if (quiz.length === 0) return "";
+
+  const questions = quiz.map((q, i) => {
+    const opts = q.options.map((o, j) => {
+      return `<label class="quiz-opt" data-q="${i}" data-o="${j}" onclick="checkAnswer(this,${i},${j},${q.answer})"><input type="radio" name="q${i}"> ${escapeHtml(o)}</label>`;
+    }).join("\n");
+
+    return `<pre class="quiz-q">${i + 1}. ${escapeHtml(q.question)}</pre>
+<div class="quiz-opts">
+${opts}
+</div>`;
+  }).join("\n");
+
+  return `<pre class="dim" style="margin-top:1.5em"><a href="#" onclick="var q=document.getElementById('quiz');q.style.display=q.style.display==='none'?'block':'none';return false">[t'as suivi ?]</a></pre>
+<div id="quiz" style="display:none">
+${questions}
+<pre class="quiz-score" id="quiz-score"></pre>
+</div>`;
 }
 
 function buildClusterSection(clusters: SerializedCluster[]): string {
@@ -252,7 +274,8 @@ function buildPage(
   pastDates: string[],
   recaps: Record<string, string>,
   barometer: MoodBarometer,
-  clusters: SerializedCluster[]
+  clusters: SerializedCluster[],
+  quiz: QuizQuestion[]
 ): string {
   const dateFr = formatDateFr(date);
   const dateIso = toISODate(date);
@@ -283,6 +306,7 @@ function buildPage(
   const empty = 20 - filled;
   const moodBar = "█".repeat(filled) + "░".repeat(empty);
 
+  const quizSection = buildQuizSection(quiz);
   const clusterSection = buildClusterSection(clusters);
   const blindSpotsSection = buildBlindSpotsSection(clusters);
 
@@ -302,15 +326,22 @@ a{color:#0057b7;}
 .sep{color:#999;margin:1.2em 0;overflow:hidden;}
 .about{font-size:0.82em;color:#888;border-left:2px solid #ddd;padding-left:1em;margin:1em 0 1.5em;}
 .baro{font-size:0.9em;margin:0.8em 0 1.5em;color:#555;}
-.recap p{margin-bottom:0.8em;}
-.section-title{font-weight:bold;margin-bottom:0.6em;color:#333;}
-.cluster-header{color:#555;margin-top:0.8em;}
-.cluster-data{font-size:0.85em;color:#666;margin-bottom:0.3em;}
+.recap p{margin-bottom:0.8em;text-align:justify;}
+.section-title{font-weight:bold;margin-bottom:0.6em;color:#999;font-size:0.78em;}
+.cluster-header{color:#999;margin-top:0.6em;font-size:0.75em;}
+.cluster-data{font-size:0.72em;color:#aaa;margin-bottom:0.2em;}
 .sources{font-size:0.78em;color:#999;margin-top:2em;}
 .sources a{color:#999;}
 .footer{font-size:0.78em;color:#bbb;margin-top:1em;}
 .tip{cursor:pointer;color:#888;font-size:0.75em;margin-left:1px;position:relative;}
 .tip-text{display:none;position:absolute;bottom:1.5em;left:0;background:#FFFCF0;border:1px solid #000;padding:0.4em 0.6em;font-size:1.35em;max-width:300px;width:max-content;z-index:10;line-height:1.4;font-style:normal;font-weight:normal;}
+.quiz-q{margin-top:0.8em;color:#333;}
+.quiz-opts{margin:0.3em 0 0.5em 1.5em;}
+.quiz-opt{display:block;cursor:pointer;padding:0.15em 0;font-family:inherit;font-size:inherit;}
+.quiz-opt.correct{color:#2a7d2a;}
+.quiz-opt.wrong{color:#c0392b;text-decoration:line-through;}
+.quiz-opt.reveal{color:#2a7d2a;}
+.quiz-score{margin-top:0.8em;color:#555;}
 .dim{font-size:0.82em;color:#999;}
 .dim a{color:#999;}
 </style>
@@ -324,14 +355,9 @@ a{color:#0057b7;}
 |____/|_|  \\___/ /_/
 </pre>
 <div class="about">
-chaque matin, une ia lit ~50 sources de presse française — de
-libération à valeurs actuelles, de mediapart au figaro — et croise
-leurs couvertures. le score de chaque sujet ne vient pas d'un
-algorithme opaque : il combine le nombre de médias qui en parlent,
-la diversité politique de la couverture, et l'ampleur de l'événement.
-si la gauche et la droite couvrent le même sujet, c'est probablement
-important. si un seul camp en parle, ça mérite d'être signalé aussi.
-5h07 ne résume pas juste l'actu. il montre comment elle est fabriquée.
+chaque matin, une ia lit ~50 sources françaises et trie ce qui
+compte par couverture, diversité politique et ampleur. pas de pub,
+pas de clics, pas d'éditorial.
 </div>
 <pre class="sep">════════════════════════════════════════</pre>
 <pre>${escapeHtml(dateFr)}</pre>
@@ -341,6 +367,7 @@ important. si un seul camp en parle, ça mérite d'être signalé aussi.
 <div class="recap">
 ${recapToHtml(recaps["principal"] ?? "")}
 </div>
+${quizSection}
 ${clusterSection}
 ${blindSpotsSection}
 <pre class="sep">────────────────────────────────────────</pre>
@@ -358,6 +385,26 @@ ${pastSection}
 function toggleTip(el){var t=el.querySelector('.tip-text');if(!t)return;var open=t.style.display==='block';closeAllTips();if(!open)t.style.display='block';}
 function closeAllTips(){var a=document.querySelectorAll('.tip-text');for(var i=0;i<a.length;i++)a[i].style.display='none';}
 document.addEventListener('click',function(e){if(!e.target.closest('.tip'))closeAllTips();});
+var quizDone={};var quizTotal=4;
+function checkAnswer(el,q,picked,correct){
+  if(quizDone[q])return;quizDone[q]=true;
+  var opts=document.querySelectorAll('[data-q="'+q+'"]');
+  for(var i=0;i<opts.length;i++){
+    if(parseInt(opts[i].dataset.o)===correct)opts[i].classList.add(picked===correct?'correct':'reveal');
+    if(parseInt(opts[i].dataset.o)===picked&&picked!==correct)opts[i].classList.add('wrong');
+    opts[i].style.pointerEvents='none';
+  }
+  if(picked===correct)el.innerHTML='✓ '+el.textContent.trim();
+  else el.innerHTML='✗ '+el.textContent.trim();
+  var done=Object.keys(quizDone).length;
+  if(done===quizTotal){
+    var right=0;for(var k in quizDone)if(quizDone[k])right++;
+    // recount correct
+    right=document.querySelectorAll('.quiz-opt.correct').length;
+    var msg=right===4?"t'es chaud":right>=3?"pas mal":right>=2?"moyen":"relis le récap";
+    document.getElementById('quiz-score').textContent=right+'/'+quizTotal+' — '+msg;
+  }
+}
 </script>
 </body>
 </html>`;
@@ -413,14 +460,16 @@ export async function generate(): Promise<void> {
 
   let recaps: Record<string, string>;
   let barometer: MoodBarometer;
+  let quiz: QuizQuestion[] = [];
   let clusters: SerializedCluster[] = [];
 
   const cached = existing?.article_ids as CachedData | null;
 
-  if (cached?.recaps && cached?.barometer) {
-    log("Using cached recaps + barometer from daily_digests");
+  if (cached?.recaps && cached?.barometer && cached?.quiz) {
+    log("Using cached recaps + barometer + quiz from daily_digests");
     recaps = cached.recaps;
     barometer = cached.barometer;
+    quiz = cached.quiz;
     clusters = cached.clusters ?? [];
   } else {
     const client = new Anthropic({ apiKey: config.anthropicApiKey });
@@ -439,6 +488,12 @@ export async function generate(): Promise<void> {
     ]);
     log(`✓ All recaps generated`);
     log(`✓ Barometer: ${barometer.emoji} ${barometer.mood}/100`);
+
+    // Generate quiz from the recap
+    log("Generating quiz...");
+    quiz = await generateQuiz(client, recaps["principal"] ?? "");
+    log(`✓ Quiz: ${quiz.length} questions`);
+
     clusters = cached?.clusters ?? [];
   }
 
@@ -447,15 +502,15 @@ export async function generate(): Promise<void> {
     .from("daily_digests")
     .upsert({
       date: dateIso,
-      article_ids: { urls: articles.map((a) => a.url), recaps, barometer, clusters },
+      article_ids: { urls: articles.map((a) => a.url), recaps, barometer, quiz, clusters },
     }, { onConflict: "date" });
 
   // Generate pages
-  const indexHtml = buildPage(articles, now, pastDates, recaps, barometer, clusters);
+  const indexHtml = buildPage(articles, now, pastDates, recaps, barometer, clusters, quiz);
   writeFileSync(path.join(distDir, "index.html"), indexHtml, "utf-8");
   log("✓ dist/index.html");
 
-  const datePage = buildPage(articles, now, pastDates, recaps, barometer, clusters);
+  const datePage = buildPage(articles, now, pastDates, recaps, barometer, clusters, quiz);
   writeFileSync(path.join(distDir, `${dateIso}.html`), datePage, "utf-8");
   log(`✓ dist/${dateIso}.html`);
 

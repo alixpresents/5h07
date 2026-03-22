@@ -13,8 +13,12 @@ Critères de scoring :
 - Échelle : combien de personnes en France sont concernées ?
 - Potentiel : est-ce que cet événement va provoquer d'autres événements importants ?
 
-Ignore les articles people, le clickbait, les marronniers.
-Les résultats sportifs, transferts, retraites de joueurs, classements de championnat = score maximum 3/10 sauf événement exceptionnel (mort d'un athlète, scandale de dopage national, pays hôte d'un mondial).
+Règles strictes de scoring :
+- sport (résultats, transferts, retraites de joueurs, classements) = maximum 3/10 sauf mort d'un athlète ou scandale majeur
+- people, célébrités, polémiques médiatiques (animateurs TV, influenceurs) = maximum 2/10
+- faits divers locaux sans impact systémique = maximum 4/10
+- commémorations et anniversaires = maximum 4/10 sauf si actualité liée
+- ces plafonds s'appliquent même si la couverture est forte. 20 sources qui parlent de biathlon, ça reste du sport.
 Privilégie : politique intérieure/extérieure impactante, économie, santé publique, justice, environnement, tech/science quand l'impact est concret.
 
 Réponds UNIQUEMENT en JSON brut (pas de markdown). Un tableau d'objets avec 'id' (le nom de l'événement) et 'score' (nombre décimal).`;
@@ -128,11 +132,14 @@ export async function score(clusters: ClusterInfo[]): Promise<ScoredCluster[]> {
   // Compute final scores
   const scored: ScoredCluster[] = withFreeSignals.map((c) => {
     const score_llm = llmScores.get(c.name) ?? 0;
-    const score_final =
+    let score_final =
       c.score_couverture * 0.35 +
       c.score_diversite * 0.25 +
       score_llm * 0.30 +
       c.score_fraicheur * 0.10;
+
+    // Cap: if LLM says it's not important (<=3), volume can't save it
+    if (score_llm <= 3) score_final = Math.min(score_final, 5.0);
 
     return { ...c, score_llm, score_final };
   });

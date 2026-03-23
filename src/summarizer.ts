@@ -1,8 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { config } from "./config.js";
 import { supabase } from "./db.js";
-
-const MODEL = "claude-haiku-4-5-20251001";
+import { llmCall, MODEL } from "./llm.js";
 
 export interface Persona {
   id: string;
@@ -93,7 +92,7 @@ async function generateSummaries(
     )
     .join("\n\n");
 
-  const response = await client.messages.create({
+  const response = await llmCall(client, {
     model: MODEL,
     max_tokens: 4096,
     messages: [
@@ -108,7 +107,7 @@ Articles :
 ${articlesText}`,
       },
     ],
-  });
+  }, "summaries");
 
   const text =
     response.content[0].type === "text" ? response.content[0].text : "";
@@ -130,7 +129,7 @@ export async function generateDailyRecap(
     .map((a) => `- ${a.title} (${a.source_name})\n  URL: ${a.url ?? "n/a"}\n  Description: ${a.description ?? "pas de description"}`)
     .join("\n\n");
 
-  const response = await client.messages.create({
+  const response = await llmCall(client, {
     model: MODEL,
     max_tokens: 4096,
     messages: [
@@ -139,7 +138,7 @@ export async function generateDailyRecap(
         content: `${persona.prompt}\n\nÉvénements du jour :\n\n${eventsText}`,
       },
     ],
-  });
+  }, "recap");
 
   const text =
     response.content[0].type === "text" ? response.content[0].text : "";
@@ -161,7 +160,7 @@ export async function generateFilmReco(
     .map((a) => `- ${a.title}`)
     .join("\n");
 
-  const response = await client.messages.create({
+  const response = await llmCall(client, {
     model: MODEL,
     max_tokens: 256,
     messages: [
@@ -178,7 +177,7 @@ Thèmes du jour :
 ${eventsText}`,
       },
     ],
-  });
+  }, "filmReco");
 
   const text =
     response.content[0].type === "text" ? response.content[0].text : "";
@@ -205,7 +204,7 @@ export async function generateMoodBarometer(
     .map((a) => `- ${a.title}`)
     .join("\n");
 
-  const response = await client.messages.create({
+  const response = await llmCall(client, {
     model: MODEL,
     max_tokens: 256,
     messages: [
@@ -222,7 +221,7 @@ export async function generateMoodBarometer(
 ${eventsText}`,
       },
     ],
-  });
+  }, "barometer");
 
   const text =
     response.content[0].type === "text" ? response.content[0].text : "";
@@ -244,7 +243,7 @@ export async function generateQuiz(
   client: Anthropic,
   recap: string
 ): Promise<QuizQuestion[]> {
-  const response = await client.messages.create({
+  const response = await llmCall(client, {
     model: MODEL,
     max_tokens: 2048,
     messages: [
@@ -257,7 +256,7 @@ Récap :
 ${recap}`,
       },
     ],
-  });
+  }, "quiz");
 
   const text =
     response.content[0].type === "text" ? response.content[0].text : "";

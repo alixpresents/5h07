@@ -7,8 +7,7 @@ import { summarize } from "./summarizer.js";
 import { generate } from "./generator.js";
 import { config } from "./config.js";
 import { supabase } from "./db.js";
-
-const MODEL = "claude-haiku-4-5-20251001";
+import { llmCall, MODEL } from "./llm.js";
 
 function log(msg: string): void {
   console.log(`[${new Date().toISOString()}] [pipeline] ${msg}`);
@@ -104,7 +103,7 @@ async function enrichWithHistory(
 
   // Ask Haiku to match today's subjects with past subjects
   const client = new Anthropic({ apiKey: config.anthropicApiKey });
-  const response = await client.messages.create({
+  const response = await llmCall(client, {
     model: MODEL,
     max_tokens: 4096,
     messages: [
@@ -119,7 +118,7 @@ ${allPastNames.map((n, i) => `${i}: ${n}`).join("\n")}
 pour chaque sujet d'aujourd'hui, dis-moi s'il correspond à un sujet des jours précédents (même événement, même thème continu). réponds UNIQUEMENT en JSON brut (pas de markdown). un objet où chaque clé est le nom exact du sujet d'aujourd'hui et la valeur est le nom exact du sujet passé correspondant, ou null si c'est un sujet nouveau.`,
       },
     ],
-  });
+  }, "history");
 
   const text =
     response.content[0].type === "text" ? response.content[0].text : "";

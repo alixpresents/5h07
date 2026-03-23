@@ -1,9 +1,9 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { config } from "./config.js";
 import { supabase } from "./db.js";
+import { llmCall, MODEL } from "./llm.js";
 import type { ClusterInfo } from "./dedup.js";
 
-const MODEL = "claude-haiku-4-5-20251001";
 const BATCH_SIZE = 30;
 
 const SCORING_PROMPT = `Tu es un éditeur de journal. Pour chaque événement ci-dessous (titre + description), attribue un score de pertinence de 0 à 10 pour un lecteur vivant en France.
@@ -73,7 +73,7 @@ async function scoreClustersLLM(
 
     try {
       log(`LLM scoring batch ${batchNum}/${totalBatches} (${batch.length} events)...`);
-      const response = await client.messages.create({
+      const response = await llmCall(client, {
         model: MODEL,
         max_tokens: 4096,
         messages: [
@@ -82,7 +82,7 @@ async function scoreClustersLLM(
             content: `${SCORING_PROMPT}\n\nÉvénements :\n\n${eventsText}`,
           },
         ],
-      });
+      }, `scoring batch ${batchNum}`);
 
       const text =
         response.content[0].type === "text" ? response.content[0].text : "";

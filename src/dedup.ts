@@ -1,10 +1,11 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { config } from "./config.js";
 import { supabase } from "./db.js";
+import { llmCall, MODEL, sleep } from "./llm.js";
 
-const MODEL = "claude-haiku-4-5-20251001";
 const LLM_BATCH_SIZE = 100;
-const MAX_CONCURRENT = 5;
+const MAX_CONCURRENT = 2;
+const DELAY_BETWEEN_BATCHES_MS = 3000;
 
 interface RawArticle {
   id: string;
@@ -110,7 +111,7 @@ function preClusterByKeywords(articles: RawArticle[]): Map<string, RawArticle[]>
   return result;
 }
 
-// ─── Concurrent LLM helper ─────────────────────────
+// ─── Concurrent LLM helper (with delay between batches) ──
 async function runConcurrent<T>(
   tasks: (() => Promise<T>)[],
   maxConcurrent: number
@@ -122,6 +123,7 @@ async function runConcurrent<T>(
     while (idx < tasks.length) {
       const i = idx++;
       results[i] = await tasks[i]();
+      await sleep(DELAY_BETWEEN_BATCHES_MS);
     }
   }
 
@@ -170,7 +172,7 @@ async function clusterBatch(
     .map((a) => `- ID: ${a.id} | ${a.title}`)
     .join("\n");
 
-  const response = await client.messages.create({
+  const response = await llmCall(client, {
     model: MODEL,
     max_tokens: 16384,
     messages: [
@@ -189,7 +191,7 @@ Articles :
 ${articlesText}`,
       },
     ],
-  });
+  }, "clusterBatch");
 
   const text =
     response.content[0].type === "text" ? response.content[0].text : "";
@@ -231,7 +233,7 @@ async function mergeClusters(
   }
 
   const namesText = clusterNames.map((n, i) => `${i}: ${n}`).join("\n");
-  const response = await client.messages.create({
+  const response = await llmCall(client, {
     model: MODEL,
     max_tokens: 16384,
     messages: [
@@ -250,7 +252,7 @@ réponds UNIQUEMENT en JSON brut. un tableau d'objets avec 'nom_final' et 'clust
 ${namesText}`,
       },
     ],
-  });
+  }, "mergeClusters");
 
   const text =
     response.content[0].type === "text" ? response.content[0].text : "";
@@ -271,7 +273,7 @@ async function finalDedupCheck(
 ): Promise<{ from: string[]; to: string }[]> {
   if (clusterNames.length <= 3) return [];
 
-  const response = await client.messages.create({
+  const response = await llmCall(client, {
     model: MODEL,
     max_tokens: 4096,
     messages: [
@@ -282,7 +284,7 @@ async function finalDedupCheck(
 ${clusterNames.join("\n")}`,
       },
     ],
-  });
+  }, "finalDedupCheck");
 
   const text =
     response.content[0].type === "text" ? response.content[0].text : "";

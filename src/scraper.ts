@@ -140,10 +140,9 @@ async function insertArticles(articles: RawArticle[]): Promise<number> {
 
 const GOOGLE_NEWS_FEEDS = [
   { name: "Google News France", url: "https://news.google.com/rss?hl=fr&gl=FR&ceid=FR:fr" },
-  { name: "Google News Politique", url: "https://news.google.com/rss/topics/CAAqJQgKIh9DQkFTRVFvSUwyMHZNRGx1YlY4U0JHWnlMVUlvQUFQAQ?hl=fr&gl=FR&ceid=FR:fr" },
-  { name: "Google News Économie", url: "https://news.google.com/rss/topics/CAAqKggKIiRDQkFTRlFvSUwyMHZNRGx6TVdZU0JHWnlMVUlLQUFQAQ?hl=fr&gl=FR&ceid=FR:fr" },
-  { name: "Google News Science/Tech", url: "https://news.google.com/rss/topics/CAAqKggKIiRDQkFTRlFvSUwyMHZNRGRqTVhZU0JHWnlMVUlLQUFQAQ?hl=fr&gl=FR&ceid=FR:fr" },
-  { name: "Google News Santé", url: "https://news.google.com/rss/topics/CAAqJQgKIh9DQkFTRVFvSUwyMHZNR3QwTlRFU0JHWnlMVUlvQUFQAQ?hl=fr&gl=FR&ceid=FR:fr" },
+  { name: "Google News Monde", url: "https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRGx1YlY4U0FtWnlHZ0pHVWlnQVAB?hl=fr&gl=FR&ceid=FR:fr" },
+  { name: "Google News Économie", url: "https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRGx6TVdZU0FtWnlHZ0pHVWlnQVAB?hl=fr&gl=FR&ceid=FR:fr" },
+  { name: "Google News Science/Tech", url: "https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRGRqTVhZU0FtWnlHZ0pHVWlnQVAB?hl=fr&gl=FR&ceid=FR:fr" },
 ];
 
 async function scrapeGoogleNews(): Promise<{ fetched: number; inserted: number }> {
@@ -207,7 +206,7 @@ async function scrapeNewsAPI(): Promise<{ fetched: number; inserted: number }> {
 
   try {
     const resp = await fetch(
-      `https://newsapi.org/v2/top-headlines?country=fr&pageSize=100&apiKey=${apiKey}`
+      `https://newsapi.org/v2/everything?q=france&language=fr&sortBy=publishedAt&pageSize=100&apiKey=${apiKey}`
     );
     if (!resp.ok) {
       log(`✗ NewsAPI: HTTP ${resp.status}`);
@@ -259,8 +258,8 @@ async function scrapeNewscatcher(): Promise<{ fetched: number; inserted: number 
 
   try {
     const resp = await fetch(
-      "https://api.newscatcherapi.com/v2/latest_headlines?lang=fr&countries=FR&page_size=100",
-      { headers: { "x-api-key": apiKey } }
+      "https://v3-api.newscatcherapi.com/api/latest_headlines?lang=fr&countries=FR&page_size=100",
+      { headers: { "x-api-token": apiKey } }
     );
     if (!resp.ok) {
       log(`✗ Newscatcher: HTTP ${resp.status}`);

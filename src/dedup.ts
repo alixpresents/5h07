@@ -3,7 +3,8 @@ import { config } from "./config.js";
 import { supabase } from "./db.js";
 
 const MODEL = "claude-haiku-4-5-20251001";
-const BATCH_SIZE = 100;
+const LLM_BATCH_SIZE = 100;
+const MAX_CONCURRENT = 5;
 
 interface RawArticle {
   id: string;
@@ -16,9 +17,9 @@ interface RawArticle {
 export interface ClusterInfo {
   name: string;
   article_ids: string[];
-  sources: string[]; // source_ids (deduplicated)
-  orientations: Set<string>; // for scoring diversity (gauche/centre/droite only)
-  raw_orientations: string[]; // all raw orientations for blind spots
+  sources: string[];
+  orientations: Set<string>;
+  raw_orientations: string[];
   source_names: string[];
   earliest: Date | null;
   latest: Date | null;
@@ -38,12 +39,103 @@ function log(msg: string): void {
   console.log(`[${new Date().toISOString()}] [dedup] ${msg}`);
 }
 
+// ─── Stopwords for keyword extraction ───────────────
+const STOPWORDS = new Set([
+  "le", "la", "les", "de", "du", "des", "un", "une", "et", "en", "au", "aux",
+  "à", "a", "ce", "ces", "est", "son", "sa", "ses", "sur", "par", "pour",
+  "dans", "avec", "qui", "que", "ne", "pas", "plus", "se", "il", "elle",
+  "on", "nous", "vous", "ils", "elles", "sont", "été", "être", "avoir",
+  "fait", "fait", "dit", "va", "peut", "aussi", "très", "bien", "tout",
+  "cette", "entre", "après", "avant", "comme", "mais", "ou", "car",
+  "direct", "live", "direct.", "d'un", "d'une", "l'", "qu'", "n'",
+]);
+
+function extractKeywords(title: string): string[] {
+  return title
+    .toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // remove accents
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length > 2 && !STOPWORDS.has(w));
+}
+
+function keywordOverlap(a: string[], b: string[]): number {
+  let count = 0;
+  const setB = new Set(b);
+  for (const w of a) {
+    if (setB.has(w)) count++;
+  }
+  return count;
+}
+
+// ─── Pre-cluster by keyword similarity (no LLM) ────
+function preClusterByKeywords(articles: RawArticle[]): Map<string, RawArticle[]> {
+  const groups: { keywords: string[]; articles: RawArticle[] }[] = [];
+
+  for (const article of articles) {
+    const kw = extractKeywords(article.title);
+    if (kw.length === 0) {
+      groups.push({ keywords: kw, articles: [article] });
+      continue;
+    }
+
+    let bestGroup: typeof groups[0] | null = null;
+    let bestScore = 0;
+
+    for (const g of groups) {
+      const overlap = keywordOverlap(kw, g.keywords);
+      if (overlap >= 2 && overlap > bestScore) {
+        bestScore = overlap;
+        bestGroup = g;
+      }
+    }
+
+    if (bestGroup) {
+      bestGroup.articles.push(article);
+      // Merge keywords
+      for (const w of kw) {
+        if (!bestGroup.keywords.includes(w)) bestGroup.keywords.push(w);
+      }
+    } else {
+      groups.push({ keywords: kw, articles: [article] });
+    }
+  }
+
+  const result = new Map<string, RawArticle[]>();
+  for (let i = 0; i < groups.length; i++) {
+    const g = groups[i];
+    const label = g.articles[0].title.slice(0, 80);
+    result.set(label, g.articles);
+  }
+  return result;
+}
+
+// ─── Concurrent LLM helper ─────────────────────────
+async function runConcurrent<T>(
+  tasks: (() => Promise<T>)[],
+  maxConcurrent: number
+): Promise<T[]> {
+  const results: T[] = [];
+  let idx = 0;
+
+  async function worker(): Promise<void> {
+    while (idx < tasks.length) {
+      const i = idx++;
+      results[i] = await tasks[i]();
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(maxConcurrent, tasks.length) }, () => worker());
+  await Promise.all(workers);
+  return results;
+}
+
+// ─── DB helpers ─────────────────────────────────────
 async function fetchAllArticles(): Promise<RawArticle[]> {
   const { data, error } = await supabase
     .from("articles")
     .select("id, title, source_id, published_at, description")
     .order("published_at", { ascending: false });
-
   if (error) throw new Error(`Failed to fetch articles: ${error.message}`);
   return data ?? [];
 }
@@ -53,7 +145,6 @@ async function fetchSources(): Promise<Map<string, SourceInfo>> {
     .from("sources")
     .select("id, name, orientation, category")
     .eq("active", true);
-
   if (error) throw new Error(`Failed to fetch sources: ${error.message}`);
   const map = new Map<string, SourceInfo>();
   for (const s of data ?? []) {
@@ -62,8 +153,6 @@ async function fetchSources(): Promise<Map<string, SourceInfo>> {
   return map;
 }
 
-// For scoring diversity: only gauche/centre/droite matter.
-// Service public, spécialisé, régionale are excluded.
 export function normalizePolitical(o: string): string | null {
   o = o.toLowerCase();
   if (o === "service public" || o === "specialise" || o === "regionale" || o === "autre") return null;
@@ -72,6 +161,7 @@ export function normalizePolitical(o: string): string | null {
   return "centre";
 }
 
+// ─── LLM clustering (pass 1) ────────────────────────
 async function clusterBatch(
   client: Anthropic,
   articles: RawArticle[]
@@ -86,13 +176,13 @@ async function clusterBatch(
     messages: [
       {
         role: "user",
-        content: `Tu es un éditeur de journal. Voici une liste d'articles. Regroupe-les par événement : les articles qui couvrent le même fait d'actualité doivent être dans le même groupe.
+        content: `Tu es un éditeur de journal. Voici une liste d'articles pré-regroupés par thème. Affine le regroupement : sépare les articles qui parlent d'événements différents, fusionne ceux qui parlent du même événement.
 
-Donne à chaque groupe un nom court décrivant l'événement (ex: "Réforme des retraites", "Fermeture du détroit d'Ormuz", "Second tour des municipales 2026").
+Donne à chaque groupe un nom court et précis (ex: "Second tour des municipales 2026", "Fermeture du détroit d'Ormuz").
 
-RÈGLE IMPORTANTE : ne crée jamais de cluster générique. Chaque cluster doit correspondre à UN événement précis et identifiable. Si un article ne rentre dans aucun événement précis, laisse-le seul dans son propre cluster. Des noms comme "société", "politique", "violences", "divers", "sport", "économie", "politique internationale", "société et vie quotidienne" sont INTERDITS.
+RÈGLE : ne crée jamais de cluster générique. Des noms comme "société", "politique", "sport", "économie" sont INTERDITS.
 
-Réponds UNIQUEMENT en JSON brut (pas de markdown, pas de \`\`\`). Un objet où chaque clé est le nom de l'événement et chaque valeur est un tableau d'IDs d'articles.
+Réponds UNIQUEMENT en JSON brut (pas de markdown). Un objet où chaque clé est le nom de l'événement et chaque valeur est un tableau d'IDs d'articles.
 
 Articles :
 
@@ -106,7 +196,6 @@ ${articlesText}`,
   const cleaned = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "");
   const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
-    log(`Warning: no JSON in clusterBatch response, putting each article in its own cluster`);
     const fallback: Record<string, string[]> = {};
     for (const a of articles) fallback[a.title.slice(0, 60)] = [a.id];
     return fallback;
@@ -114,14 +203,13 @@ ${articlesText}`,
   try {
     return JSON.parse(jsonMatch[0]);
   } catch {
-    log(`Warning: bad JSON in clusterBatch, putting each article in its own cluster`);
     const fallback: Record<string, string[]> = {};
     for (const a of articles) fallback[a.title.slice(0, 60)] = [a.id];
     return fallback;
   }
 }
 
-// Pass 2: merge clusters that cover the same subject
+// ─── Pass 2: merge cluster names ────────────────────
 async function mergeClusters(
   client: Anthropic,
   clusterNames: string[]
@@ -130,39 +218,32 @@ async function mergeClusters(
     return clusterNames.map((n) => ({ nom_final: n, clusters_inclus: [n] }));
   }
 
-  // If too many clusters, only merge the top ones (by name frequency/similarity)
-  // and leave the rest as-is
   const MERGE_BATCH = 200;
   if (clusterNames.length > MERGE_BATCH) {
-    log(`Too many clusters (${clusterNames.length}) for single merge call, batching...`);
-    const results: { nom_final: string; clusters_inclus: string[] }[] = [];
+    log(`Merging in batches (${clusterNames.length} clusters)...`);
+    const tasks = [];
     for (let i = 0; i < clusterNames.length; i += MERGE_BATCH) {
       const batch = clusterNames.slice(i, i + MERGE_BATCH);
-      const batchResults = await mergeClusters(client, batch);
-      results.push(...batchResults);
+      tasks.push(() => mergeClusters(client, batch));
     }
-    return results;
+    const batchResults = await runConcurrent(tasks, MAX_CONCURRENT);
+    return batchResults.flat();
   }
 
   const namesText = clusterNames.map((n, i) => `${i}: ${n}`).join("\n");
-
   const response = await client.messages.create({
     model: MODEL,
     max_tokens: 16384,
     messages: [
       {
         role: "user",
-        content: `voici une liste d'événements détectés dans la presse. certains sont en réalité le même sujet vu sous des angles différents. regroupe-les.
+        content: `voici une liste d'événements détectés dans la presse. certains sont le même sujet vu sous des angles différents. regroupe-les.
 
-par exemple 'municipales 2026 lyon', 'municipales 2026 paris', 'municipales 2026 participation' et 'élections municipales en france' c'est UN seul sujet : les municipales 2026.
+exemples : 'municipales 2026 lyon' + 'municipales 2026 paris' + 'participation municipales' = UN sujet : 'municipales 2026'. 'guerre iran-israël' + 'guerre au moyen-orient' + 'détroit d'ormuz' = UN sujet : 'conflit iran-israël'.
 
-pareil, 'guerre iran-israël', 'guerre au moyen-orient', 'blocage du détroit d'ormuz', 'tensions iran-états-unis' c'est UN seul sujet : le conflit iran-israël.
+RÈGLE : le nom_final doit être précis, jamais générique.
 
-les événements qui ne se regroupent avec rien restent seuls.
-
-RÈGLE : le nom_final doit être un événement précis, jamais une catégorie générique. des noms comme "société", "politique", "violences", "divers", "sport", "économie", "politique internationale" sont INTERDITS. si un cluster a un nom générique, éclate-le ou renomme-le avec l'événement précis.
-
-réponds UNIQUEMENT en JSON brut (pas de markdown). un tableau d'objets avec 'nom_final' (le nom synthétique du sujet) et 'clusters_inclus' (les noms exacts des clusters à fusionner, tels qu'ils apparaissent dans la liste).
+réponds UNIQUEMENT en JSON brut. un tableau d'objets avec 'nom_final' et 'clusters_inclus' (noms exacts).
 
 Événements :
 
@@ -175,26 +256,20 @@ ${namesText}`,
     response.content[0].type === "text" ? response.content[0].text : "";
   const cleaned = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "");
   const jsonMatch = cleaned.match(/\[[\s\S]*\]/);
-  if (!jsonMatch) {
-    log("Pass 2 merge failed (no JSON), skipping fusion");
-    return clusterNames.map((n) => ({ nom_final: n, clusters_inclus: [n] }));
-  }
+  if (!jsonMatch) return clusterNames.map((n) => ({ nom_final: n, clusters_inclus: [n] }));
   try {
     return JSON.parse(jsonMatch[0]);
-  } catch (err) {
-    log(`Pass 2 merge failed (bad JSON), skipping fusion`);
+  } catch {
     return clusterNames.map((n) => ({ nom_final: n, clusters_inclus: [n] }));
   }
 }
 
-// Pass 3: final dedup check on merged cluster names
+// ─── Pass 3: final dedup ────────────────────────────
 async function finalDedupCheck(
   client: Anthropic,
   clusterNames: string[]
 ): Promise<{ from: string[]; to: string }[]> {
   if (clusterNames.length <= 3) return [];
-
-  const namesText = clusterNames.join("\n");
 
   const response = await client.messages.create({
     model: MODEL,
@@ -202,13 +277,9 @@ async function finalDedupCheck(
     messages: [
       {
         role: "user",
-        content: `voici la liste finale des sujets retenus. vérifie qu'il n'y a aucun doublon. si deux sujets parlent de la même chose (ex: 'conflit iran-israël' et 'guerre moyen-orient iran israël', ou 'municipales 2026' et 'participation aux municipales 2026'), fusionne-les sous un seul nom.
+        content: `vérifie qu'il n'y a aucun doublon dans cette liste. si deux sujets parlent de la même chose, fusionne-les. réponds en JSON brut : un tableau de { "from": [...noms], "to": "nom final" }. si rien à fusionner, [].
 
-réponds UNIQUEMENT en JSON brut (pas de markdown). un tableau d'objets avec 'from' (tableau des noms à fusionner) et 'to' (le nom final). si rien à fusionner, réponds [].
-
-Sujets :
-
-${namesText}`,
+${clusterNames.join("\n")}`,
       },
     ],
   });
@@ -218,29 +289,22 @@ ${namesText}`,
   const cleaned = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "");
   const jsonMatch = cleaned.match(/\[[\s\S]*\]/);
   if (!jsonMatch) return [];
-
-  try {
-    return JSON.parse(jsonMatch[0]);
-  } catch {
-    return [];
-  }
+  try { return JSON.parse(jsonMatch[0]); } catch { return []; }
 }
 
-async function updateClusters(
-  clusters: Record<string, string[]>
-): Promise<void> {
-  for (const [clusterName, ids] of Object.entries(clusters)) {
+// ─── DB update ──────────────────────────────────────
+async function updateClusters(clusters: Record<string, string[]>): Promise<void> {
+  // Batch updates by cluster name
+  const entries = Object.entries(clusters);
+  const tasks = entries.map(([clusterName, ids]) => async () => {
     for (const id of ids) {
-      const { error } = await supabase
+      await supabase
         .from("articles")
         .update({ cluster_id: clusterName })
         .eq("id", id);
-
-      if (error && !error.message.includes("invalid input syntax")) {
-        log(`Failed to update cluster for ${id}: ${error.message}`);
-      }
     }
-  }
+  });
+  await runConcurrent(tasks, 10);
 }
 
 function buildClusterInfo(
@@ -252,7 +316,6 @@ function buildClusterInfo(
   const validArticles = articleIds
     .map((id) => articleMap.get(id))
     .filter((a): a is RawArticle => a !== undefined);
-
   if (validArticles.length === 0) return null;
 
   const sourceIds = [...new Set(validArticles.map((a) => a.source_id))];
@@ -295,8 +358,9 @@ function buildClusterInfo(
   };
 }
 
+// ─── Main dedup ─────────────────────────────────────
 export async function dedup(): Promise<ClusterInfo[]> {
-  log("Starting deduplication on ALL articles...");
+  log("Starting deduplication...");
 
   const [articles, sourceMap] = await Promise.all([
     fetchAllArticles(),
@@ -304,24 +368,42 @@ export async function dedup(): Promise<ClusterInfo[]> {
   ]);
   log(`Found ${articles.length} articles, ${sourceMap.size} sources`);
 
-  if (articles.length === 0) {
-    log("Nothing to deduplicate.");
-    return [];
-  }
+  if (articles.length === 0) return [];
 
   const client = new Anthropic({ apiKey: config.anthropicApiKey });
   const articleMap = new Map(articles.map((a) => [a.id, a]));
 
-  // === PASS 1: cluster articles by title similarity ===
+  // === PRE-CLUSTER: keyword similarity (no LLM) ===
+  const t0 = Date.now();
+  const preClusters = preClusterByKeywords(articles);
+  const multiArticleClusters = [...preClusters.entries()].filter(([, a]) => a.length >= 2);
+  const singleArticles = [...preClusters.entries()].filter(([, a]) => a.length === 1).map(([, a]) => a[0]);
+
+  log(`Pre-cluster: ${articles.length} articles → ${preClusters.size} groups (${multiArticleClusters.length} with 2+ articles, ${singleArticles.length} singles) in ${Date.now() - t0}ms`);
+
+  // === PASS 1: LLM refine only multi-article groups ===
+  // Flatten multi-article groups into batches for LLM
+  const articlesToCluster: RawArticle[] = [];
+  for (const [, arts] of multiArticleClusters) {
+    articlesToCluster.push(...arts);
+  }
+  log(`Pass 1 — sending ${articlesToCluster.length} articles to LLM (${singleArticles.length} singles skip LLM)`);
+
   let allClusters: Record<string, string[]> = {};
-  const batches = Math.ceil(articles.length / BATCH_SIZE);
 
-  for (let i = 0; i < articles.length; i += BATCH_SIZE) {
-    const batch = articles.slice(i, i + BATCH_SIZE);
-    const batchNum = Math.floor(i / BATCH_SIZE) + 1;
-    log(`Pass 1 — clustering batch ${batchNum}/${batches} (${batch.length} articles)...`);
+  // Build batches and run in parallel
+  const batchTasks: (() => Promise<Record<string, string[]>>)[] = [];
+  for (let i = 0; i < articlesToCluster.length; i += LLM_BATCH_SIZE) {
+    const batch = articlesToCluster.slice(i, i + LLM_BATCH_SIZE);
+    const batchNum = Math.floor(i / LLM_BATCH_SIZE) + 1;
+    batchTasks.push(async () => {
+      log(`  Pass 1 batch ${batchNum}/${Math.ceil(articlesToCluster.length / LLM_BATCH_SIZE)}...`);
+      return clusterBatch(client, batch);
+    });
+  }
 
-    const clusters = await clusterBatch(client, batch);
+  const batchResults = await runConcurrent(batchTasks, MAX_CONCURRENT);
+  for (const clusters of batchResults) {
     for (const [name, ids] of Object.entries(clusters)) {
       if (allClusters[name]) {
         allClusters[name].push(...ids);
@@ -331,14 +413,18 @@ export async function dedup(): Promise<ClusterInfo[]> {
     }
   }
 
+  // Add single articles as their own clusters
+  for (const a of singleArticles) {
+    allClusters[a.title.slice(0, 80)] = [a.id];
+  }
+
   log(`Pass 1 done: ${Object.keys(allClusters).length} clusters`);
 
-  // === PASS 2: merge clusters that are the same subject ===
+  // === PASS 2: merge similar cluster names (parallel batches) ===
   const clusterNames = Object.keys(allClusters);
   log(`Pass 2 — merging ${clusterNames.length} cluster names...`);
   const mergeGroups = await mergeClusters(client, clusterNames);
 
-  // Build merged clusters
   const mergedClusters: Record<string, string[]> = {};
   const usedNames = new Set<string>();
 
@@ -359,18 +445,17 @@ export async function dedup(): Promise<ClusterInfo[]> {
     }
   }
 
-  // Add any clusters that weren't included in any merge group
   for (const [name, ids] of Object.entries(allClusters)) {
     if (!usedNames.has(name) && !mergedClusters[name]) {
       mergedClusters[name] = ids;
     }
   }
 
-  log(`Pass 2 done: ${Object.keys(allClusters).length} → ${Object.keys(mergedClusters).length} clusters after fusion`);
+  log(`Pass 2 done: ${clusterNames.length} → ${Object.keys(mergedClusters).length} clusters`);
 
-  // === PASS 3: final dedup check on merged names ===
+  // === PASS 3: final dedup (single call) ===
   const mergedNames = Object.keys(mergedClusters);
-  log(`Pass 3 — final dedup check on ${mergedNames.length} cluster names...`);
+  log(`Pass 3 — final dedup check on ${mergedNames.length} names...`);
   const finalFusions = await finalDedupCheck(client, mergedNames);
 
   let pass3Count = 0;
@@ -387,7 +472,7 @@ export async function dedup(): Promise<ClusterInfo[]> {
     }
     mergedClusters[fusion.to] = targetIds;
   }
-  log(`Pass 3 done: ${pass3Count} additional fusions`);
+  log(`Pass 3 done: ${pass3Count} fusions`);
 
   await updateClusters(mergedClusters);
 
@@ -398,20 +483,16 @@ export async function dedup(): Promise<ClusterInfo[]> {
     if (info) clusterInfos.push(info);
   }
 
-  log(`--- Top clusters ---`);
   const sorted = [...clusterInfos].sort((a, b) => b.sources.length - a.sources.length);
+  log(`--- Top clusters ---`);
   for (const c of sorted.slice(0, 15)) {
     log(`• ${c.name} (${c.article_ids.length} articles, ${c.source_names.length} sources)`);
   }
-  log(`${clusterInfos.length} events total from ${articles.length} articles`);
+  log(`${clusterInfos.length} events from ${articles.length} articles`);
 
   return clusterInfos;
 }
 
-// Run directly
 if (require.main === module) {
-  dedup().catch((err) => {
-    console.error(err);
-    process.exit(1);
-  });
+  dedup().catch((err) => { console.error(err); process.exit(1); });
 }

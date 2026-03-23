@@ -42,7 +42,7 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
           NEWSAPI_KEY: ${{ secrets.NEWSAPI_KEY }}
-          NEWSCATCHER_KEY: ${{ secrets.NEWSCATCHER_KEY }}
+          NEWSDATA_KEY: ${{ secrets.NEWSDATA_KEY }}
         run: node build/pipeline.js
 
       - name: Commit and push dist/

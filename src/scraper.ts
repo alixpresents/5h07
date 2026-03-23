@@ -247,55 +247,54 @@ async function scrapeNewsAPI(): Promise<{ fetched: number; inserted: number }> {
   }
 }
 
-// ─── Newscatcher API ────────────────────────────────
+// ─── NewsData.io API ────────────────────────────────
 
-async function scrapeNewscatcher(): Promise<{ fetched: number; inserted: number }> {
-  const apiKey = process.env.NEWSCATCHER_KEY;
+async function scrapeNewsData(): Promise<{ fetched: number; inserted: number }> {
+  const apiKey = process.env.NEWSDATA_KEY;
   if (!apiKey) {
-    log("⊘ Newscatcher: no API key, skipping");
+    log("⊘ NewsData: no API key, skipping");
     return { fetched: 0, inserted: 0 };
   }
 
   try {
     const resp = await fetch(
-      "https://v3-api.newscatcherapi.com/api/latest_headlines?lang=fr&countries=FR&page_size=100",
-      { headers: { "x-api-token": apiKey } }
+      `https://newsdata.io/api/1/latest?apikey=${apiKey}&country=fr&language=fr&size=50`
     );
     if (!resp.ok) {
-      log(`✗ Newscatcher: HTTP ${resp.status}`);
+      log(`✗ NewsData: HTTP ${resp.status}`);
       return { fetched: 0, inserted: 0 };
     }
 
     const json = await resp.json() as {
-      articles: { title: string; link: string; summary: string | null; published_date: string; rights: string }[];
+      results: { title: string; link: string; description: string | null; pubDate: string; source_name: string }[];
     };
 
     const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const articles: RawArticle[] = [];
 
-    for (const item of json.articles ?? []) {
+    for (const item of json.results ?? []) {
       if (!item.link || !item.title) continue;
-      const pubDate = item.published_date ? new Date(item.published_date) : null;
+      const pubDate = item.pubDate ? new Date(item.pubDate) : null;
       if (pubDate && pubDate < cutoff) continue;
 
-      const sourceId = item.rights ? await matchSourceId(item.rights) : null;
+      const sourceId = item.source_name ? await matchSourceId(item.source_name) : null;
       const finalSourceId = sourceId ?? await getFallbackSourceId();
 
       articles.push({
         source_id: finalSourceId,
         title: item.title.trim(),
-        description: item.summary?.trim() ?? null,
+        description: item.description?.trim() ?? null,
         url: item.link.trim(),
         published_at: pubDate?.toISOString() ?? null,
       });
     }
 
     const inserted = await insertArticles(articles);
-    log(`✓ Newscatcher: ${articles.length} articles, ${inserted} new`);
+    log(`✓ NewsData: ${articles.length} articles, ${inserted} new`);
     return { fetched: articles.length, inserted };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    log(`✗ Newscatcher: FAILED — ${msg}`);
+    log(`✗ NewsData: FAILED — ${msg}`);
     return { fetched: 0, inserted: 0 };
   }
 }
@@ -342,9 +341,9 @@ export async function scrape(): Promise<void> {
   totalFetched += na.fetched;
   totalNew += na.inserted;
 
-  // 4. Newscatcher
-  log("--- Newscatcher ---");
-  const nc = await scrapeNewscatcher();
+  // 4. NewsData.io
+  log("--- NewsData ---");
+  const nc = await scrapeNewsData();
   totalFetched += nc.fetched;
   totalNew += nc.inserted;
 

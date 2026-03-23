@@ -204,11 +204,10 @@ async function main(): Promise<void> {
 
   const total = ((Date.now() - start) / 1000).toFixed(1);
   log(`=== pipeline complete in ${total}s ===`);
+  process.exit(0);
 }
 
-main().then(() => {
-  process.exit(0);
-}).catch((err) => {
+main().catch((err) => {
   console.error(err);
   process.exit(1);
 });

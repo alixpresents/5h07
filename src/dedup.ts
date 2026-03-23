@@ -229,7 +229,7 @@ async function mergeClusters(
       tasks.push(() => mergeClusters(client, batch));
     }
     const batchResults = await runConcurrent(tasks, MAX_CONCURRENT);
-    return batchResults.flat();
+    return batchResults.filter(Array.isArray).flat();
   }
 
   const namesText = clusterNames.map((n, i) => `${i}: ${n}`).join("\n");
@@ -406,11 +406,13 @@ export async function dedup(): Promise<ClusterInfo[]> {
 
   const batchResults = await runConcurrent(batchTasks, MAX_CONCURRENT);
   for (const clusters of batchResults) {
+    if (!clusters || typeof clusters !== "object") continue;
     for (const [name, ids] of Object.entries(clusters)) {
+      const safeIds = Array.isArray(ids) ? ids : [];
       if (allClusters[name]) {
-        allClusters[name].push(...ids);
+        allClusters[name].push(...safeIds);
       } else {
-        allClusters[name] = ids;
+        allClusters[name] = safeIds;
       }
     }
   }
@@ -430,7 +432,8 @@ export async function dedup(): Promise<ClusterInfo[]> {
   const mergedClusters: Record<string, string[]> = {};
   const usedNames = new Set<string>();
 
-  for (const group of mergeGroups) {
+  for (const group of (Array.isArray(mergeGroups) ? mergeGroups : [])) {
+    if (!group?.clusters_inclus || !Array.isArray(group.clusters_inclus)) continue;
     const allIds: string[] = [];
     for (const oldName of group.clusters_inclus) {
       if (allClusters[oldName]) {
@@ -461,8 +464,8 @@ export async function dedup(): Promise<ClusterInfo[]> {
   const finalFusions = await finalDedupCheck(client, mergedNames);
 
   let pass3Count = 0;
-  for (const fusion of finalFusions) {
-    if (!fusion.from || fusion.from.length < 2) continue;
+  for (const fusion of (Array.isArray(finalFusions) ? finalFusions : [])) {
+    if (!fusion?.from || !Array.isArray(fusion.from) || fusion.from.length < 2) continue;
     const targetIds: string[] = mergedClusters[fusion.to] ?? [];
     for (const fromName of fusion.from) {
       if (fromName === fusion.to) continue;

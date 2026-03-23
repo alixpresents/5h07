@@ -12,7 +12,7 @@ function requireEnv(name: string): string {
 export const config = {
   supabaseUrl: requireEnv("SUPABASE_URL"),
   supabaseServiceKey: requireEnv("SUPABASE_SERVICE_KEY"),
-  supabaseAnonKey: requireEnv("SUPABASE_ANON_KEY"),
+  supabaseAnonKey: process.env.SUPABASE_ANON_KEY ?? "",
   anthropicApiKey: requireEnv("ANTHROPIC_API_KEY"),
   adminPassword: process.env.ADMIN_PASSWORD ?? "5h07admin",
 } as const;

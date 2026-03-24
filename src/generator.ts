@@ -288,7 +288,15 @@ function buildPage(
   const dateFr = formatDateFr(date);
   const dateIso = toISODate(date);
 
+  const seenSources = new Set<string>();
   const sourceLinks = articles
+    .filter((a) => {
+      const name = a.source_name;
+      if (!name || name === "Unknown" || name === "Autre") return false;
+      if (seenSources.has(name)) return false;
+      seenSources.add(name);
+      return true;
+    })
     .map((a) => `<a href="${escapeHtml(a.url)}" target="_blank" rel="noopener">${escapeHtml(a.source_name)}</a>`)
     .join(" · ");
 

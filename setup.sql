@@ -63,7 +63,8 @@ INSERT INTO sources (name, rss_url, orientation, category) VALUES
   -- Presse nationale généraliste
   ('Le Monde', 'https://www.lemonde.fr/rss/une.xml', 'centre-gauche', 'nationale'),
   ('Le Figaro', 'https://www.lefigaro.fr/rss/figaro_actualites.xml', 'droite', 'nationale'),
-  ('Libération', 'https://www.liberation.fr/arc/outboundfeeds/rss-all/collection/accueil-702/?outputType=xml', 'gauche', 'nationale'),
+  ('Libération (politique)', 'https://www.liberation.fr/arc/outboundfeeds/rss-all/category/politique/?outputType=xml', 'gauche', 'nationale'),
+  ('Libération (international)', 'https://www.liberation.fr/arc/outboundfeeds/rss-all/category/international/?outputType=xml', 'gauche', 'nationale'),
   ('20 Minutes', 'https://www.20minutes.fr/feeds/rss-une.xml', 'centre', 'nationale'),
   ('Le Parisien', 'https://www.leparisien.fr/arc/outboundfeeds/rss/collection/a-la-une/', 'centre', 'nationale'),
   ('La Croix', 'https://www.la-croix.com/RSS/UNIVERS', 'centre', 'nationale'),
@@ -73,22 +74,26 @@ INSERT INTO sources (name, rss_url, orientation, category) VALUES
   ('BFM TV', 'https://www.bfmtv.com/rss/news-24-7/', 'centre-droit', 'info continue'),
   ('France 24', 'https://www.france24.com/fr/rss', 'service public', 'info continue'),
   ('RFI', 'https://www.rfi.fr/fr/rss', 'service public', 'info continue'),
-  ('Arte Info', 'https://www.arte.tv/fr/afp/latest', 'service public', 'info continue'),
-  ('LCI', 'https://www.lci.fr/rss.xml', 'centre-droit', 'info continue'),
+  -- Arte Info: désactivé (pas de flux RSS disponible)
+  -- ('Arte Info', 'https://www.arte.tv/fr/afp/latest', 'service public', 'info continue'),
+  ('TF1 Info (ex-LCI)', 'https://www.tf1info.fr/feeds/rss-une.xml', 'centre-droit', 'info continue'),
   ('Europe 1', 'https://www.europe1.fr/rss.xml', 'droite', 'info continue'),
   -- Magazines / hebdos
-  ('Le Point', 'https://www.lepoint.fr/rss.xml', 'centre-droit', 'magazine'),
+  ('Le Point', 'https://www.lepoint.fr/rss', 'centre-droit', 'magazine'),
   ('L''Express', 'https://www.lexpress.fr/arc/outboundfeeds/rss/alaune.xml', 'centre-droit', 'magazine'),
   ('L''Obs', 'https://www.nouvelobs.com/rss.xml', 'centre-gauche', 'magazine'),
-  ('Marianne', 'https://www.marianne.net/rss.xml', 'gauche souverainiste', 'magazine'),
+  -- Marianne: désactivé (RSS bloqué 403)
+  -- ('Marianne', 'https://www.marianne.net/rss.xml', 'gauche souverainiste', 'magazine'),
   ('Courrier International', 'https://www.courrierinternational.com/feed/all/rss.xml', 'centre', 'magazine'),
-  ('Politis', 'https://www.politis.fr/feed/', 'gauche', 'magazine'),
+  ('Politis', 'https://www.politis.fr/flux-rss/', 'gauche', 'magazine'),
   ('Valeurs Actuelles', 'https://www.valeursactuelles.com/feed', 'droite', 'magazine'),
   -- Économie / business
-  ('Les Echos', 'https://www.lesechos.fr/rss/rss_une.xml', 'centre-droit', 'économie'),
+  -- Les Echos: désactivé (RSS bloqué 403 par CDN)
+  -- ('Les Echos', 'https://www.lesechos.fr/rss/rss_une.xml', 'centre-droit', 'économie'),
   ('La Tribune', 'https://www.latribune.fr/rss/rubriques/actualite.html', 'centre', 'économie'),
-  ('Capital', 'https://www.capital.fr/feeds/rss', 'centre', 'économie'),
-  ('L''Usine Nouvelle', 'https://www.usinenouvelle.com/rss/', 'spécialisé', 'économie'),
+  ('Capital', 'https://feed.prismamediadigital.com/v1/cap/rss?sources=capital,capital-avec-agence-france-presse,capital-avec-reuters', 'centre', 'économie'),
+  -- L'Usine Nouvelle: désactivé (bloqué par DataDome)
+  -- ('L''Usine Nouvelle', 'https://www.usinenouvelle.com/rss/', 'spécialisé', 'économie'),
   ('Challenges', 'https://www.challenges.fr/rss.xml', 'centre-droit', 'économie'),
   -- Tech / science
   ('Numerama', 'https://www.numerama.com/feed/', 'spécialisé', 'tech'),
@@ -100,20 +105,22 @@ INSERT INTO sources (name, rss_url, orientation, category) VALUES
   ('Mediapart', 'https://www.mediapart.fr/articles/feed', 'gauche', 'investigation'),
   ('Basta!', 'https://basta.media/spip.php?page=backend', 'gauche', 'investigation'),
   -- Investigation / opinion
-  ('Blast', 'https://www.blast-info.fr/feed', 'gauche', 'investigation'),
+  ('Blast', 'https://api.blast-info.fr/rss.xml', 'gauche', 'investigation'),
   -- Presse régionale
   ('Ouest-France', 'https://www.ouest-france.fr/rss.xml', 'centre', 'régionale'),
   ('Sud Ouest', 'https://www.sudouest.fr/rss.xml', 'centre', 'régionale'),
   ('La Dépêche', 'https://www.ladepeche.fr/rss.xml', 'centre', 'régionale'),
   ('La Voix du Nord', 'https://www.lavoixdunord.fr/rss.xml', 'centre', 'régionale'),
-  ('Le Progrès', 'https://www.leprogres.fr/rss.xml', 'centre', 'régionale'),
+  ('Le Progrès', 'https://www.leprogres.fr/rss', 'centre', 'régionale'),
+  ('Le Progrès (france-monde)', 'https://www.leprogres.fr/france-monde/rss', 'centre', 'régionale'),
   ('Le Télégramme', 'https://www.letelegramme.fr/rss.xml', 'centre', 'régionale'),
-  ('La Provence', 'https://www.laprovence.com/rss.xml', 'centre', 'régionale'),
-  ('Le Dauphiné', 'https://www.ledauphine.com/rss.xml', 'centre', 'régionale'),
-  ('Dernières Nouvelles d''Alsace', 'https://www.dna.fr/rss.xml', 'centre', 'régionale'),
+  -- La Provence: désactivé (pas de flux RSS disponible)
+  -- ('La Provence', 'https://www.laprovence.com/rss.xml', 'centre', 'régionale'),
+  ('Le Dauphiné', 'https://www.ledauphine.com/rss', 'centre', 'régionale'),
+  ('Dernières Nouvelles d''Alsace', 'https://www.dna.fr/rss', 'centre', 'régionale'),
   ('Midi Libre', 'https://www.midilibre.fr/rss.xml', 'centre', 'régionale'),
-  ('Nice Matin', 'https://www.nicematin.com/rss.xml', 'centre', 'régionale'),
-  ('Actu.fr', 'https://www.actu.fr/feed', 'centre', 'régionale'),
+  ('Nice Matin', 'https://www.nicematin.com/rss', 'centre', 'régionale'),
+  ('Actu.fr', 'https://www.actu.fr/rss.xml', 'centre', 'régionale'),
   -- International vu de France
   ('Huffington Post FR', 'https://www.huffingtonpost.fr/feeds/index.xml', 'centre-gauche', 'internationale'),
   ('Slate FR', 'https://www.slate.fr/rss.xml', 'centre', 'internationale');

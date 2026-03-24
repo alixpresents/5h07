@@ -239,13 +239,20 @@ async function mergeClusters(
     messages: [
       {
         role: "user",
-        content: `voici une liste d'événements détectés dans la presse. certains sont le même sujet vu sous des angles différents. regroupe-les.
+        content: `voici une liste d'événements détectés dans la presse. ta mission : FUSIONNER AGRESSIVEMENT tous les clusters qui parlent du même sujet, même sous des angles différents, dans des villes différentes, ou avec des formulations différentes.
 
-exemples : 'municipales 2026 lyon' + 'municipales 2026 paris' + 'participation municipales' = UN sujet : 'municipales 2026'. 'guerre iran-israël' + 'guerre au moyen-orient' + 'détroit d'ormuz' = UN sujet : 'conflit iran-israël'.
+RÈGLE ABSOLUE : toute variation d'un même événement = UN SEUL cluster. en cas de doute, FUSIONNE.
 
-RÈGLE : le nom_final doit être précis, jamais générique.
+exemples de fusions obligatoires :
+- 'municipales 2026 lyon' + 'municipales 2026 paris' + 'résultats municipales' + 'second tour municipales' + 'municipales 2026 - résultats et analyses' + 'élections municipales 2026 Paris' = UN sujet : 'municipales 2026'
+- 'guerre iran-israël' + 'guerre au moyen-orient' + 'frappes sur l'iran' + 'détroit d'ormuz' + 'riposte israélienne' = UN sujet : 'conflit iran-israël'
+- 'réforme des retraites' + 'manifestations retraites' + 'retraites : réactions syndicales' = UN sujet : 'réforme des retraites'
 
-réponds UNIQUEMENT en JSON brut. un tableau d'objets avec 'nom_final' et 'clusters_inclus' (noms exacts).
+si deux clusters partagent le même événement de fond (même élection, même conflit, même réforme, même fait divers, même catastrophe), ils DOIVENT être fusionnés, peu importe la différence d'angle, de lieu, ou de formulation.
+
+le nom_final doit être court et précis (l'événement, pas l'angle). jamais générique (pas "politique", "société", etc.).
+
+réponds UNIQUEMENT en JSON brut. un tableau d'objets avec 'nom_final' et 'clusters_inclus' (noms exacts de la liste ci-dessous).
 
 Événements :
 

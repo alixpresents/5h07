@@ -461,6 +461,86 @@ export async function dedup(): Promise<ClusterInfo[]> {
 
   log(`Pass 2 done: ${clusterNames.length} → ${Object.keys(mergedClusters).length} clusters`);
 
+  // === PASS 2b: cross-batch dedup on significant clusters (3+ sources) ===
+  // Only send clusters with 3+ articles (likely multi-source) — keeps the list small for one focused call
+  const significantNames: string[] = [];
+  const smallNames: string[] = [];
+  for (const [name, ids] of Object.entries(mergedClusters)) {
+    if (ids.length >= 3) {
+      significantNames.push(name);
+    } else {
+      smallNames.push(name);
+    }
+  }
+  log(`Pass 2b — cross-batch dedup on ${significantNames.length} significant clusters (${smallNames.length} small clusters skipped)...`);
+
+  if (significantNames.length > 3) {
+    const namesText = significantNames.map((n, i) => `${i}: ${n}`).join("\n");
+    const resp = await llmCall(client, {
+      model: MODEL,
+      max_tokens: 16384,
+      messages: [{
+        role: "user",
+        content: `voici la liste complète des clusters significatifs. fusionne IMPÉRATIVEMENT ceux qui parlent du même sujet, même sous des angles différents.
+
+exemples de fusions obligatoires :
+- 'municipales 2026 résultats', 'municipales 2026 en france', 'municipales 2026 second tour', 'élections municipales 2026 généralités', 'municipales 2026 analyses' → UN SEUL cluster
+- 'conflit iran-israël', 'négociations trump-iran', 'frappes au moyen-orient', 'menaces iraniennes golfe persique' → UN SEUL cluster
+- 'mort de jospin', 'hommage jospin' → UN SEUL cluster
+
+la règle : si un lecteur dirait 'c'est le même sujet', c'est le même cluster. fusionne agressivement. il vaut mieux fusionner trop que pas assez.
+
+réponds UNIQUEMENT en JSON brut. un tableau d'objets avec 'nom_final' (court et précis) et 'clusters_inclus' (noms exacts de la liste).
+
+${namesText}`,
+      }],
+    }, "crossBatchMerge");
+    const text = resp.content[0].type === "text" ? resp.content[0].text : "";
+    const cleaned = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "");
+    const jsonMatch = cleaned.match(/\[[\s\S]*\]/);
+
+    if (jsonMatch) {
+      try {
+        const pass2bGroups: { nom_final: string; clusters_inclus: string[] }[] = JSON.parse(jsonMatch[0]);
+        const pass2bUsed = new Set<string>();
+        const pass2bResult: Record<string, string[]> = {};
+
+        for (const group of pass2bGroups) {
+          if (!group?.clusters_inclus || !Array.isArray(group.clusters_inclus)) continue;
+          const allIds: string[] = [];
+          for (const oldName of group.clusters_inclus) {
+            if (mergedClusters[oldName]) {
+              allIds.push(...mergedClusters[oldName]);
+              pass2bUsed.add(oldName);
+            }
+          }
+          if (allIds.length > 0) {
+            if (pass2bResult[group.nom_final]) {
+              pass2bResult[group.nom_final].push(...allIds);
+            } else {
+              pass2bResult[group.nom_final] = allIds;
+            }
+          }
+        }
+
+        // Keep unmatched clusters
+        for (const [name, ids] of Object.entries(mergedClusters)) {
+          if (!pass2bUsed.has(name) && !pass2bResult[name]) {
+            pass2bResult[name] = ids;
+          }
+        }
+
+        // Replace mergedClusters
+        for (const k of Object.keys(mergedClusters)) delete mergedClusters[k];
+        for (const [k, v] of Object.entries(pass2bResult)) mergedClusters[k] = v;
+      } catch {
+        log("Pass 2b: failed to parse JSON, skipping");
+      }
+    }
+  }
+
+  log(`Pass 2b done: ${significantNames.length + smallNames.length} → ${Object.keys(mergedClusters).length} clusters`);
+
   // === PASS 3: final dedup (single call) ===
   const mergedNames = Object.keys(mergedClusters);
   log(`Pass 3 — final dedup check on ${mergedNames.length} names...`);

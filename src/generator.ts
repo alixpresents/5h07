@@ -479,40 +479,42 @@ export async function generate(): Promise<void> {
 
   const cached = existing?.article_ids as CachedData | null;
 
-  if (cached?.recaps && cached?.barometer && cached?.quiz) {
-    log("Using cached recaps + barometer + quiz from daily_digests");
+  clusters = cached?.clusters ?? [];
+  const client = new Anthropic({ apiKey: config.anthropicApiKey });
+  const recapArticles = articles.map((a) => ({
+    id: a.url,
+    title: a.title,
+    description: a.summary,
+    url: a.url,
+    score: a.score,
+    source_name: a.source_name,
+  }));
+
+  // Use cached recaps (Opus) if available, regenerate only if missing
+  if (cached?.recaps) {
+    log("Using cached recaps from daily_digests (skipping Opus call)");
     recaps = cached.recaps;
-    barometer = cached.barometer;
-    quiz = cached.quiz;
-    clusters = cached.clusters ?? [];
   } else {
-    const client = new Anthropic({ apiKey: config.anthropicApiKey });
-    const recapArticles = articles.map((a) => ({
-      id: a.url,
-      title: a.title,
-      description: a.summary,
-      url: a.url,
-      score: a.score,
-      source_name: a.source_name,
-    }));
-    const clusterNames = (cached?.clusters ?? [])
+    const clusterNames = clusters
       .filter((c) => c.score_final >= 4)
       .slice(0, 7)
       .map((c) => c.name);
-    log("Generating recaps + barometer...");
-    [recaps, barometer] = await Promise.all([
-      generateAllRecaps(client, recapArticles, clusterNames.length > 0 ? clusterNames : undefined),
-      generateMoodBarometer(client, recapArticles),
-    ]);
+    log("Generating recaps (no cache found)...");
+    recaps = await generateAllRecaps(client, recapArticles, clusterNames.length > 0 ? clusterNames : undefined);
     log(`✓ All recaps generated`);
-    log(`✓ Barometer: ${barometer.emoji} ${barometer.mood}/100`);
+  }
 
-    // Generate quiz from the recap
-    log("Generating quiz...");
+  // Use cached barometer/quiz if available, otherwise generate (cheap Haiku calls)
+  if (cached?.barometer && cached?.quiz) {
+    log("Using cached barometer + quiz from daily_digests");
+    barometer = cached.barometer;
+    quiz = cached.quiz;
+  } else {
+    log("Generating barometer + quiz...");
+    barometer = await generateMoodBarometer(client, recapArticles);
+    log(`✓ Barometer: ${barometer.emoji} ${barometer.mood}/100`);
     quiz = await generateQuiz(client, recaps["principal"] ?? "");
     log(`✓ Quiz: ${quiz.length} questions`);
-
-    clusters = cached?.clusters ?? [];
   }
 
   // Save everything to cache

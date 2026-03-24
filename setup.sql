@@ -123,4 +123,12 @@ INSERT INTO sources (name, rss_url, orientation, category) VALUES
   ('Actu.fr', 'https://www.actu.fr/rss.xml', 'centre', 'régionale'),
   -- International vu de France
   ('Huffington Post FR', 'https://www.huffingtonpost.fr/feeds/index.xml', 'centre-gauche', 'internationale'),
-  ('Slate FR', 'https://www.slate.fr/rss.xml', 'centre', 'internationale');
+  ('Slate FR', 'https://www.slate.fr/rss.xml', 'centre', 'internationale'),
+  -- Ajouts mars 2026
+  ('Public Sénat', 'https://www.publicsenat.fr/feed', 'service public', 'info continue'),
+  ('Le Journal du Dimanche', 'https://www.lejdd.fr/rss.xml', 'centre-droit', 'magazine'),
+  ('Atlantico', 'https://rss.atlantico.fr/', 'droite', 'magazine'),
+  ('Causeur', 'https://www.causeur.fr/feed', 'droite', 'magazine'),
+  ('Le Vent Se Lève', 'https://lvsl.fr/feed', 'gauche', 'magazine'),
+  ('Regards', 'https://regards.fr/feed', 'gauche', 'magazine'),
+  ('Rue89 Lyon', 'https://www.rue89lyon.fr/feed', 'centre-gauche', 'régionale');

@@ -143,6 +143,8 @@ const GOOGLE_NEWS_FEEDS = [
   { name: "Google News Monde", url: "https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRGx1YlY4U0FtWnlHZ0pHVWlnQVAB?hl=fr&gl=FR&ceid=FR:fr" },
   { name: "Google News Économie", url: "https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRGx6TVdZU0FtWnlHZ0pHVWlnQVAB?hl=fr&gl=FR&ceid=FR:fr" },
   { name: "Google News Science/Tech", url: "https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRGRqTVhZU0FtWnlHZ0pHVWlnQVAB?hl=fr&gl=FR&ceid=FR:fr" },
+  { name: "Google News Santé", url: "https://news.google.com/rss/topics/CAAqIQgKIhtDQkFTRGdvSUwyMHZNR3QwTlRFU0FtWnlLQUFQAQ?hl=fr&gl=FR&ceid=FR:fr" },
+  { name: "Google News Environnement", url: "https://news.google.com/rss/search?q=environnement+OR+climat+OR+%C3%A9cologie&hl=fr&gl=FR&ceid=FR:fr" },
 ];
 
 async function scrapeGoogleNews(): Promise<{ fetched: number; inserted: number }> {
@@ -197,6 +199,12 @@ async function scrapeGoogleNews(): Promise<{ fetched: number; inserted: number }
 
 // ─── NewsAPI ────────────────────────────────────────
 
+const NEWSAPI_QUERIES = [
+  { label: "general", q: "france", category: "" },
+  { label: "business", q: "économie OR entreprise OR bourse", category: "" },
+  { label: "science", q: "science OR technologie OR climat", category: "" },
+];
+
 async function scrapeNewsAPI(): Promise<{ fetched: number; inserted: number }> {
   const apiKey = process.env.NEWSAPI_KEY;
   if (!apiKey) {
@@ -204,50 +212,63 @@ async function scrapeNewsAPI(): Promise<{ fetched: number; inserted: number }> {
     return { fetched: 0, inserted: 0 };
   }
 
-  try {
-    const resp = await fetch(
-      `https://newsapi.org/v2/everything?q=france&language=fr&sortBy=publishedAt&pageSize=100&apiKey=${apiKey}`
-    );
-    if (!resp.ok) {
-      log(`✗ NewsAPI: HTTP ${resp.status}`);
-      return { fetched: 0, inserted: 0 };
+  let totalFetched = 0;
+  let totalInserted = 0;
+  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+  for (const query of NEWSAPI_QUERIES) {
+    try {
+      const resp = await fetch(
+        `https://newsapi.org/v2/everything?q=${encodeURIComponent(query.q)}&language=fr&sortBy=publishedAt&pageSize=100&apiKey=${apiKey}`
+      );
+      if (!resp.ok) {
+        log(`✗ NewsAPI (${query.label}): HTTP ${resp.status}`);
+        continue;
+      }
+
+      const json = await resp.json() as {
+        articles: { title: string; url: string; description: string | null; publishedAt: string; source: { name: string } }[];
+      };
+
+      const articles: RawArticle[] = [];
+
+      for (const item of json.articles ?? []) {
+        if (!item.url || !item.title || item.title === "[Removed]") continue;
+        const pubDate = item.publishedAt ? new Date(item.publishedAt) : null;
+        if (pubDate && pubDate < cutoff) continue;
+
+        const sourceId = await matchSourceId(item.source.name);
+        const finalSourceId = sourceId ?? await getFallbackSourceId();
+
+        articles.push({
+          source_id: finalSourceId,
+          title: item.title.trim(),
+          description: item.description?.trim() ?? null,
+          url: item.url.trim(),
+          published_at: pubDate?.toISOString() ?? null,
+        });
+      }
+
+      const inserted = await insertArticles(articles);
+      totalFetched += articles.length;
+      totalInserted += inserted;
+      log(`✓ NewsAPI (${query.label}): ${articles.length} articles, ${inserted} new`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log(`✗ NewsAPI (${query.label}): FAILED — ${msg}`);
     }
-
-    const json = await resp.json() as {
-      articles: { title: string; url: string; description: string | null; publishedAt: string; source: { name: string } }[];
-    };
-
-    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const articles: RawArticle[] = [];
-
-    for (const item of json.articles ?? []) {
-      if (!item.url || !item.title || item.title === "[Removed]") continue;
-      const pubDate = item.publishedAt ? new Date(item.publishedAt) : null;
-      if (pubDate && pubDate < cutoff) continue;
-
-      const sourceId = await matchSourceId(item.source.name);
-      const finalSourceId = sourceId ?? await getFallbackSourceId();
-
-      articles.push({
-        source_id: finalSourceId,
-        title: item.title.trim(),
-        description: item.description?.trim() ?? null,
-        url: item.url.trim(),
-        published_at: pubDate?.toISOString() ?? null,
-      });
-    }
-
-    const inserted = await insertArticles(articles);
-    log(`✓ NewsAPI: ${articles.length} articles, ${inserted} new`);
-    return { fetched: articles.length, inserted };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    log(`✗ NewsAPI: FAILED — ${msg}`);
-    return { fetched: 0, inserted: 0 };
   }
+
+  return { fetched: totalFetched, inserted: totalInserted };
 }
 
 // ─── NewsData.io API ────────────────────────────────
+
+const NEWSDATA_CATEGORIES = [
+  { label: "politics", category: "politics" },
+  { label: "business", category: "business" },
+  { label: "top", category: "top" },
+];
 
 async function scrapeNewsData(): Promise<{ fetched: number; inserted: number }> {
   const apiKey = process.env.NEWSDATA_KEY;
@@ -256,47 +277,54 @@ async function scrapeNewsData(): Promise<{ fetched: number; inserted: number }> 
     return { fetched: 0, inserted: 0 };
   }
 
-  try {
-    const resp = await fetch(
-      `https://newsdata.io/api/1/latest?apikey=${apiKey}&country=fr&language=fr&size=50`
-    );
-    if (!resp.ok) {
-      log(`✗ NewsData: HTTP ${resp.status}`);
-      return { fetched: 0, inserted: 0 };
+  let totalFetched = 0;
+  let totalInserted = 0;
+  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+  for (const cat of NEWSDATA_CATEGORIES) {
+    try {
+      const resp = await fetch(
+        `https://newsdata.io/api/1/latest?apikey=${apiKey}&country=fr&language=fr&size=50&category=${cat.category}`
+      );
+      if (!resp.ok) {
+        log(`✗ NewsData (${cat.label}): HTTP ${resp.status}`);
+        continue;
+      }
+
+      const json = await resp.json() as {
+        results: { title: string; link: string; description: string | null; pubDate: string; source_name: string }[];
+      };
+
+      const articles: RawArticle[] = [];
+
+      for (const item of json.results ?? []) {
+        if (!item.link || !item.title) continue;
+        const pubDate = item.pubDate ? new Date(item.pubDate) : null;
+        if (pubDate && pubDate < cutoff) continue;
+
+        const sourceId = item.source_name ? await matchSourceId(item.source_name) : null;
+        const finalSourceId = sourceId ?? await getFallbackSourceId();
+
+        articles.push({
+          source_id: finalSourceId,
+          title: item.title.trim(),
+          description: item.description?.trim() ?? null,
+          url: item.link.trim(),
+          published_at: pubDate?.toISOString() ?? null,
+        });
+      }
+
+      const inserted = await insertArticles(articles);
+      totalFetched += articles.length;
+      totalInserted += inserted;
+      log(`✓ NewsData (${cat.label}): ${articles.length} articles, ${inserted} new`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log(`✗ NewsData (${cat.label}): FAILED — ${msg}`);
     }
-
-    const json = await resp.json() as {
-      results: { title: string; link: string; description: string | null; pubDate: string; source_name: string }[];
-    };
-
-    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const articles: RawArticle[] = [];
-
-    for (const item of json.results ?? []) {
-      if (!item.link || !item.title) continue;
-      const pubDate = item.pubDate ? new Date(item.pubDate) : null;
-      if (pubDate && pubDate < cutoff) continue;
-
-      const sourceId = item.source_name ? await matchSourceId(item.source_name) : null;
-      const finalSourceId = sourceId ?? await getFallbackSourceId();
-
-      articles.push({
-        source_id: finalSourceId,
-        title: item.title.trim(),
-        description: item.description?.trim() ?? null,
-        url: item.link.trim(),
-        published_at: pubDate?.toISOString() ?? null,
-      });
-    }
-
-    const inserted = await insertArticles(articles);
-    log(`✓ NewsData: ${articles.length} articles, ${inserted} new`);
-    return { fetched: articles.length, inserted };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    log(`✗ NewsData: FAILED — ${msg}`);
-    return { fetched: 0, inserted: 0 };
   }
+
+  return { fetched: totalFetched, inserted: totalInserted };
 }
 
 // ─── Main scrape function ───────────────────────────

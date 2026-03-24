@@ -18,7 +18,7 @@ export const PERSONAS: Persona[] = [
 ton style : t'es ce pote qui lit tout et qui te résume la journée au café. pas un journaliste, pas un prof. quelqu'un de cultivé qui parle normalement. tu peux te permettre une réaction honnête de temps en temps ('c'est pas anodin', 'on en reparlera', 'là c'est du lourd'), mais sans forcer. t'es pas là pour faire le malin, t'es là pour que le lecteur comprenne ce qui se passe.
 
 les règles :
-- sois concis : 400-600 mots max, pas un mot de trop
+- sois concis : 600-900 mots max, pas un mot de trop
 - vulgarise tout : si un terme n'est pas compris par quelqu'un qui n'a pas suivi l'actu cette semaine, explique-le ou utilise une annotation [[explication]]
 - contextualise en une phrase max par sujet : ce qui s'est passé avant, pourquoi ça arrive maintenant
 - dis l'impact concret : en quoi ça change quelque chose pour les gens
@@ -131,7 +131,7 @@ export async function generateDailyRecap(
     .join("\n\n");
 
   const clusterContext = clusterNames && clusterNames.length > 0
-    ? `\n\nIMPORTANT : ton récap doit couvrir exactement ces sujets (et seulement ceux-là), dans cet ordre de priorité :\n${clusterNames.map((n, i) => `${i + 1}. ${n}`).join("\n")}\n\nchaque sujet de cette liste doit apparaître dans ton récap. n'en invente pas d'autres.`
+    ? `\n\nIMPORTANT : ton récap doit couvrir exactement ces ${clusterNames.length} sujets (et seulement ceux-là), dans cet ordre de priorité :\n${clusterNames.map((n, i) => `${i + 1}. ${n}`).join("\n")}\n\nchaque sujet de cette liste doit avoir AU MINIMUM une phrase dans le récap. aucun sujet ne doit être ignoré. n'en invente pas d'autres.`
     : "";
 
   const response = await llmCall(client, {

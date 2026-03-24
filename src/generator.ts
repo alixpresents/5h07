@@ -168,7 +168,7 @@ ${questions}
 }
 
 function buildClusterSection(clusters: SerializedCluster[]): string {
-  const top = clusters.filter((c) => c.score_final >= 4).slice(0, 10);
+  const top = clusters.filter((c) => c.score_final >= 4).slice(0, 7);
   if (top.length === 0) return "";
 
   const maxSources = Math.max(...top.map((c) => c.num_sources), 1);
@@ -487,7 +487,7 @@ export async function generate(): Promise<void> {
     }));
     const clusterNames = (cached?.clusters ?? [])
       .filter((c) => c.score_final >= 4)
-      .slice(0, 10)
+      .slice(0, 7)
       .map((c) => c.name);
     log("Generating recaps + barometer...");
     [recaps, barometer] = await Promise.all([

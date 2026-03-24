@@ -182,7 +182,9 @@ async function clusterBatch(
 
 Donne à chaque groupe un nom court et précis (ex: "Second tour des municipales 2026", "Fermeture du détroit d'Ormuz").
 
-RÈGLE : ne crée jamais de cluster générique. Des noms comme "société", "politique", "sport", "économie" sont INTERDITS.
+INTERDIT de créer des clusters génériques comme 'affaires judiciaires', 'divers insolite', 'dossiers géopolitiques', 'disparitions et violences', 'crises agricoles', 'santé publique', 'élections internationales', 'accidents', 'société', 'politique', 'sport', 'économie'. Chaque cluster doit être UN événement précis et identifiable. Si deux articles n'ont pas de lien direct entre eux, ils vont dans des clusters séparés.
+
+Les élections dans différents pays sont des événements SÉPARÉS. 'référendum italien' et 'élections allemandes' ne vont PAS dans le même cluster.
 
 Réponds UNIQUEMENT en JSON brut (pas de markdown). Un objet où chaque clé est le nom de l'événement et chaque valeur est un tableau d'IDs d'articles.
 

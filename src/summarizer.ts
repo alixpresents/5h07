@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { config } from "./config.js";
 import { supabase } from "./db.js";
-import { llmCall, MODEL } from "./llm.js";
+import { llmCall, HAIKU, SONNET, OPUS } from "./llm.js";
 
 export interface Persona {
   id: string;
@@ -93,7 +93,7 @@ async function generateSummaries(
     .join("\n\n");
 
   const response = await llmCall(client, {
-    model: MODEL,
+    model: HAIKU,
     max_tokens: 4096,
     messages: [
       {
@@ -135,7 +135,7 @@ export async function generateDailyRecap(
     : "";
 
   const response = await llmCall(client, {
-    model: MODEL,
+    model: OPUS,
     max_tokens: 4096,
     messages: [
       {
@@ -166,7 +166,7 @@ export async function generateFilmReco(
     .join("\n");
 
   const response = await llmCall(client, {
-    model: MODEL,
+    model: SONNET,
     max_tokens: 256,
     messages: [
       {
@@ -210,7 +210,7 @@ export async function generateMoodBarometer(
     .join("\n");
 
   const response = await llmCall(client, {
-    model: MODEL,
+    model: HAIKU,
     max_tokens: 256,
     messages: [
       {
@@ -249,7 +249,7 @@ export async function generateQuiz(
   recap: string
 ): Promise<QuizQuestion[]> {
   const response = await llmCall(client, {
-    model: MODEL,
+    model: HAIKU,
     max_tokens: 2048,
     messages: [
       {

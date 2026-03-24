@@ -7,7 +7,7 @@ import { summarize } from "./summarizer.js";
 import { generate } from "./generator.js";
 import { config } from "./config.js";
 import { supabase } from "./db.js";
-import { llmCall, MODEL, getTokenUsage } from "./llm.js";
+import { llmCall, HAIKU, getTokenUsage } from "./llm.js";
 
 function log(msg: string): void {
   console.log(`[${new Date().toISOString()}] [pipeline] ${msg}`);
@@ -104,7 +104,7 @@ async function enrichWithHistory(
   // Ask Haiku to match today's subjects with past subjects
   const client = new Anthropic({ apiKey: config.anthropicApiKey });
   const response = await llmCall(client, {
-    model: MODEL,
+    model: HAIKU,
     max_tokens: 4096,
     messages: [
       {
@@ -215,7 +215,11 @@ async function main(): Promise<void> {
   const total = ((Date.now() - start) / 1000).toFixed(1);
   const usage = getTokenUsage();
   log(`=== pipeline complete in ${total}s ===`);
-  log(`=== LLM usage: ${usage.calls} calls, ${usage.input} input tokens, ${usage.output} output tokens, estimated cost: ${usage.estimatedCost} ===`);
+  log(`=== LLM cost breakdown ===`);
+  for (const [model, stats] of Object.entries(usage.byModel)) {
+    log(`  ${model}: ${stats.calls} calls, ${stats.input} in / ${stats.output} out, ${stats.cost}`);
+  }
+  log(`  TOTAL: ${usage.totalCost}`);
   process.exit(0);
 }
 

@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { config } from "./config.js";
 import { supabase } from "./db.js";
-import { llmCall, MODEL, sleep } from "./llm.js";
+import { llmCall, HAIKU, sleep } from "./llm.js";
 
 const LLM_BATCH_SIZE = 100;
 const MAX_CONCURRENT = 2;
@@ -173,7 +173,7 @@ async function clusterBatch(
     .join("\n");
 
   const response = await llmCall(client, {
-    model: MODEL,
+    model: HAIKU,
     max_tokens: 16384,
     messages: [
       {
@@ -236,7 +236,7 @@ async function mergeClusters(
 
   const namesText = clusterNames.map((n, i) => `${i}: ${n}`).join("\n");
   const response = await llmCall(client, {
-    model: MODEL,
+    model: HAIKU,
     max_tokens: 16384,
     messages: [
       {
@@ -279,7 +279,7 @@ async function finalDedupCheck(
   if (clusterNames.length <= 3) return [];
 
   const response = await llmCall(client, {
-    model: MODEL,
+    model: HAIKU,
     max_tokens: 4096,
     messages: [
       {
@@ -479,7 +479,7 @@ export async function dedup(): Promise<ClusterInfo[]> {
   if (significantNames.length > 3) {
     const namesText = significantNames.map((n, i) => `${i}: ${n}`).join("\n");
     const resp = await llmCall(client, {
-      model: MODEL,
+      model: HAIKU,
       max_tokens: 16384,
       messages: [{
         role: "user",

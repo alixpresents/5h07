@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { config } from "./config.js";
 import { supabase } from "./db.js";
-import { llmCall, MODEL } from "./llm.js";
+import { llmCall, SONNET } from "./llm.js";
 import type { ClusterInfo } from "./dedup.js";
 
 const BATCH_SIZE = 30;
@@ -74,7 +74,7 @@ async function scoreClustersLLM(
     try {
       log(`LLM scoring batch ${batchNum}/${totalBatches} (${batch.length} events)...`);
       const response = await llmCall(client, {
-        model: MODEL,
+        model: SONNET,
         max_tokens: 4096,
         messages: [
           {

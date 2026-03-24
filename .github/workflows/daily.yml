@@ -6,6 +6,8 @@ on:
     # Note: en heure d'hiver (CET = UTC+1), 3h07 UTC = 4h07 CET. Pour 5h07 CET en hiver, il faudrait 4h07 UTC.
     # On garde 3h07 UTC = 5h07 CEST (mars-octobre). Ajuster si besoin.
     - cron: '7 3 * * *'
+  repository_dispatch:
+    types: [daily-pipeline]
   workflow_dispatch: # permet de lancer manuellement
 
 permissions:

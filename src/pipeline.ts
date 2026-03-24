@@ -207,7 +207,16 @@ async function main(): Promise<void> {
     .filter((c) => c.score_final >= 4)
     .slice(0, 7)
     .map((c) => c.name);
-  await runStep("5. summarizer", () => summarize(10, topClusterNames));
+  const { recaps } = await runStep("5. summarizer", () => summarize(10, topClusterNames));
+
+  // Save recaps to daily_digests so generator uses cache instead of regenerating
+  await supabase
+    .from("daily_digests")
+    .upsert({
+      date: dateIso,
+      article_ids: { clusters: topClusters, recaps },
+    }, { onConflict: "date" });
+  log("Saved recaps to daily_digests cache");
 
   // 6. Generate static HTML site
   await runStep("6. generator", generate);

@@ -123,11 +123,16 @@ ${articlesText}`,
 export async function generateDailyRecap(
   client: Anthropic,
   articles: ArticleToSummarize[],
-  persona: Persona
+  persona: Persona,
+  clusterNames?: string[]
 ): Promise<string> {
   const eventsText = articles
     .map((a) => `- ${a.title} (${a.source_name})\n  URL: ${a.url ?? "n/a"}\n  Description: ${a.description ?? "pas de description"}`)
     .join("\n\n");
+
+  const clusterContext = clusterNames && clusterNames.length > 0
+    ? `\n\nIMPORTANT : ton récap doit couvrir exactement ces sujets (et seulement ceux-là), dans cet ordre de priorité :\n${clusterNames.map((n, i) => `${i + 1}. ${n}`).join("\n")}\n\nchaque sujet de cette liste doit apparaître dans ton récap. n'en invente pas d'autres.`
+    : "";
 
   const response = await llmCall(client, {
     model: MODEL,
@@ -135,7 +140,7 @@ export async function generateDailyRecap(
     messages: [
       {
         role: "user",
-        content: `${persona.prompt}\n\nÉvénements du jour :\n\n${eventsText}`,
+        content: `${persona.prompt}${clusterContext}\n\nÉvénements du jour :\n\n${eventsText}`,
       },
     ],
   }, "recap");
@@ -274,12 +279,13 @@ ${recap}`,
 
 export async function generateAllRecaps(
   client: Anthropic,
-  articles: ArticleToSummarize[]
+  articles: ArticleToSummarize[],
+  clusterNames?: string[]
 ): Promise<Record<string, string>> {
   const results = await Promise.all(
     PERSONAS.map(async (persona) => {
       log(`Generating ${persona.id}'s recap...`);
-      const recap = await generateDailyRecap(client, articles, persona);
+      const recap = await generateDailyRecap(client, articles, persona, clusterNames);
       log(`✓ ${persona.id}'s recap generated (${recap.length} chars)`);
       return [persona.id, recap] as const;
     })
@@ -302,7 +308,7 @@ async function saveSummaries(
   }
 }
 
-export async function summarize(limit = 10): Promise<{ recaps: Record<string, string> }> {
+export async function summarize(limit = 10, clusterNames?: string[]): Promise<{ recaps: Record<string, string> }> {
   log("Starting summarization...");
 
   const articles = await fetchTopArticles(limit);
@@ -320,7 +326,7 @@ export async function summarize(limit = 10): Promise<{ recaps: Record<string, st
   await saveSummaries(summaries);
   log(`✓ ${summaries.length} article summaries saved`);
 
-  const recaps = await generateAllRecaps(client, articles);
+  const recaps = await generateAllRecaps(client, articles, clusterNames);
 
   // Display
   for (const persona of PERSONAS) {

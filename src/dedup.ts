@@ -239,18 +239,14 @@ async function mergeClusters(
     messages: [
       {
         role: "user",
-        content: `voici une liste d'événements détectés dans la presse. ta mission : FUSIONNER AGRESSIVEMENT tous les clusters qui parlent du même sujet, même sous des angles différents, dans des villes différentes, ou avec des formulations différentes.
+        content: `ces clusters décrivent des événements. fusionne IMPÉRATIVEMENT ceux qui parlent du même sujet, même sous des angles différents. exemples de fusions obligatoires :
+- 'municipales 2026', 'municipales 2026 résultats', 'municipales paris', 'municipales implications 2027' → UN SEUL cluster 'municipales 2026'
+- 'conflit iran-israël', 'tensions moyen-orient', 'détroit d'ormuz', 'missiles iraniens' → UN SEUL cluster 'conflit iran-israël'
+- 'guerre ukraine', 'OTAN ukraine', 'drones ukraine' → UN SEUL cluster 'guerre en ukraine'
 
-RÈGLE ABSOLUE : toute variation d'un même événement = UN SEUL cluster. en cas de doute, FUSIONNE.
+la règle : si un lecteur dirait 'c'est le même sujet', c'est le même cluster. sois agressif dans les fusions. il vaut mieux fusionner trop que pas assez.
 
-exemples de fusions obligatoires :
-- 'municipales 2026 lyon' + 'municipales 2026 paris' + 'résultats municipales' + 'second tour municipales' + 'municipales 2026 - résultats et analyses' + 'élections municipales 2026 Paris' = UN sujet : 'municipales 2026'
-- 'guerre iran-israël' + 'guerre au moyen-orient' + 'frappes sur l'iran' + 'détroit d'ormuz' + 'riposte israélienne' = UN sujet : 'conflit iran-israël'
-- 'réforme des retraites' + 'manifestations retraites' + 'retraites : réactions syndicales' = UN sujet : 'réforme des retraites'
-
-si deux clusters partagent le même événement de fond (même élection, même conflit, même réforme, même fait divers, même catastrophe), ils DOIVENT être fusionnés, peu importe la différence d'angle, de lieu, ou de formulation.
-
-le nom_final doit être court et précis (l'événement, pas l'angle). jamais générique (pas "politique", "société", etc.).
+le nom_final doit être court et précis. jamais générique (pas "politique", "société", etc.).
 
 réponds UNIQUEMENT en JSON brut. un tableau d'objets avec 'nom_final' et 'clusters_inclus' (noms exacts de la liste ci-dessous).
 

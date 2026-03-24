@@ -485,9 +485,13 @@ export async function generate(): Promise<void> {
       score: a.score,
       source_name: a.source_name,
     }));
+    const clusterNames = (cached?.clusters ?? [])
+      .filter((c) => c.score_final >= 4)
+      .slice(0, 10)
+      .map((c) => c.name);
     log("Generating recaps + barometer...");
     [recaps, barometer] = await Promise.all([
-      generateAllRecaps(client, recapArticles),
+      generateAllRecaps(client, recapArticles, clusterNames.length > 0 ? clusterNames : undefined),
       generateMoodBarometer(client, recapArticles),
     ]);
     log(`✓ All recaps generated`);

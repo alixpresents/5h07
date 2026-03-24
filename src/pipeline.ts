@@ -170,11 +170,16 @@ pour chaque sujet d'aujourd'hui, dis-moi s'il correspond à un sujet des jours p
 }
 
 async function main(): Promise<void> {
+  const skipScraper = process.argv.includes("--skip-scraper");
   log("=== 5h07 pipeline start ===\n");
   const start = Date.now();
 
   // 1. Scrape all RSS sources
-  await runStep("1. scraper", scrape);
+  if (skipScraper) {
+    log("--- 1. scraper SKIPPED (--skip-scraper) ---\n");
+  } else {
+    await runStep("1. scraper", scrape);
+  }
 
   // 2. Cluster ALL articles by event (dedup)
   const clusters = await runStep("2. dedup", dedup);
@@ -197,7 +202,12 @@ async function main(): Promise<void> {
   log(`Saved ${topClusters.length} scored clusters to daily_digests`);
 
   // 5. Summarize top articles + generate recaps
-  await runStep("5. summarizer", summarize);
+  // Pass top cluster names so the recap covers exactly the same subjects as "pourquoi ces sujets"
+  const topClusterNames = topClusters
+    .filter((c) => c.score_final >= 4)
+    .slice(0, 10)
+    .map((c) => c.name);
+  await runStep("5. summarizer", () => summarize(10, topClusterNames));
 
   // 6. Generate static HTML site
   await runStep("6. generator", generate);

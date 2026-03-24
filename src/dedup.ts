@@ -182,7 +182,7 @@ async function clusterBatch(
 
 Donne à chaque groupe un nom court et précis (ex: "Second tour des municipales 2026", "Fermeture du détroit d'Ormuz").
 
-INTERDIT de créer des clusters génériques comme 'affaires judiciaires', 'divers insolite', 'dossiers géopolitiques', 'disparitions et violences', 'crises agricoles', 'santé publique', 'élections internationales', 'accidents', 'société', 'politique', 'sport', 'économie'. Chaque cluster doit être UN événement précis et identifiable. Si deux articles n'ont pas de lien direct entre eux, ils vont dans des clusters séparés.
+INTERDIT de créer des clusters génériques comme 'affaires judiciaires', 'divers insolite', 'dossiers géopolitiques', 'disparitions et violences', 'crises agricoles', 'santé publique', 'élections internationales', 'accidents', 'société', 'politique', 'sport', 'économie', 'culture et divertissement', 'jeunesse et éducation', 'fiscalité prix et tarifs', 'crimes et affaires judiciaires', 'incendies et accidents', 'technologie et données'. Les noms contenant 'actualités générales', 'actualités du jour', 'divers du' sont aussi INTERDITS. Chaque cluster doit être UN événement précis et identifiable. Si deux articles n'ont pas de lien direct entre eux, ils vont dans des clusters séparés.
 
 Les élections dans différents pays sont des événements SÉPARÉS. 'référendum italien' et 'élections allemandes' ne vont PAS dans le même cluster.
 

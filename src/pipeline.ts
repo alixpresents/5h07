@@ -39,6 +39,8 @@ interface SerializedCluster {
   num_sources: number;
   is_new?: boolean;
   streak_days?: number;
+  latest_article?: string | null; // ISO timestamp of most recent article
+  is_redit?: boolean;
 }
 
 function serializeClusters(clusters: ScoredCluster[]): SerializedCluster[] {
@@ -57,6 +59,7 @@ function serializeClusters(clusters: ScoredCluster[]): SerializedCluster[] {
     score_fraicheur: c.score_fraicheur,
     score_final: c.score_final,
     num_sources: c.sources.length,
+    latest_article: c.latest?.toISOString() ?? null,
   }));
 }
 
@@ -158,11 +161,30 @@ pour chaque sujet d'aujourd'hui, dis-moi s'il correspond à un sujet des jours p
     }
   }
 
+  // Anti-redit: penalize recurring subjects with no fresh articles (< 12h)
+  const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
+  for (const cluster of topClusters) {
+    if (cluster.streak_days && cluster.streak_days > 1) {
+      const latestDate = cluster.latest_article ? new Date(cluster.latest_article) : null;
+      const hasFreshArticles = latestDate && latestDate > twelveHoursAgo;
+      if (!hasFreshArticles) {
+        const oldScore = cluster.score_final;
+        cluster.score_final = oldScore / 2;
+        cluster.is_redit = true;
+        log(`  ♻️ REDIT: ${cluster.name} — ${oldScore.toFixed(1)} → ${cluster.score_final.toFixed(1)} (no articles < 12h)`);
+      }
+    }
+  }
+
+  // Re-sort after anti-redit penalties
+  topClusters.sort((a, b) => b.score_final - a.score_final);
+
   // Log results
   for (const c of topClusters.slice(0, 10)) {
     const tags = [];
     if (c.is_new) tags.push("🔺 nouveau");
-    if (c.streak_days && c.streak_days > 1) tags.push(`jour ${c.streak_days}`);
+    if (c.streak_days && c.streak_days > 1 && !c.is_redit) tags.push(`jour ${c.streak_days}`);
+    if (c.is_redit) tags.push("♻️ redit pénalisé");
     if (tags.length > 0) log(`  ${c.name} — ${tags.join(", ")}`);
   }
 

@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { config } from "./config.js";
 import { supabase } from "./db.js";
-import { llmCall, HAIKU, SONNET, OPUS } from "./llm.js";
+import { llmCall, HAIKU, OPUS } from "./llm.js";
 
 export interface Persona {
   id: string;
@@ -148,50 +148,6 @@ export async function generateDailyRecap(
   const text =
     response.content[0].type === "text" ? response.content[0].text : "";
   return text.trim();
-}
-
-export interface FilmReco {
-  titre: string;
-  realisateur: string;
-  annee: number;
-  lien: string;
-}
-
-export async function generateFilmReco(
-  client: Anthropic,
-  articles: ArticleToSummarize[]
-): Promise<FilmReco> {
-  const eventsText = articles.slice(0, 5)
-    .map((a) => `- ${a.title}`)
-    .join("\n");
-
-  const response = await llmCall(client, {
-    model: SONNET,
-    max_tokens: 256,
-    messages: [
-      {
-        role: "user",
-        content: `à partir des thèmes du jour, recommande un seul film en lien avec l'actualité. pas forcément littéral : un lien thématique, une atmosphère, une résonance. privilégie le cinéma français et international de qualité (pas de blockbuster hollywoodien sauf si c'est vraiment pertinent). réponds UNIQUEMENT en JSON brut (pas de markdown) :
-- titre : titre du film
-- realisateur : nom du réalisateur
-- annee : année de sortie
-- lien : une phrase de 10 mots max qui fait le pont entre le film et l'actu du jour, sans expliquer le film
-
-Thèmes du jour :
-
-${eventsText}`,
-      },
-    ],
-  }, "filmReco");
-
-  const text =
-    response.content[0].type === "text" ? response.content[0].text : "";
-  const cleaned = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
-  const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
-    return { titre: "La Haine", realisateur: "Mathieu Kassovitz", annee: 1995, lien: "la chute, c'est pas le plus dur" };
-  }
-  return JSON.parse(jsonMatch[0]);
 }
 
 export interface MoodBarometer {

@@ -261,6 +261,11 @@ var TODAY='2026-03-24';
   var p=prompt('mot de passe admin');
   if(p!=='dnq0618W*'){document.body.innerHTML='<pre>accès refusé</pre>';document.body.style.display='block';return;}
   document.body.style.display='block';
+
+  function normalize(s){return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();}
+  function words(s){var stop=['le','la','les','de','du','des','un','une','et','en','au','aux','a','ce','est','sur','par','pour','dans','avec'];var w=normalize(s).split(' ');return w.filter(function(x){return x.length>2&&stop.indexOf(x)<0;});}
+  function fuzzy(a,b){var wa=words(a),wb=words(b);if(wa.length===0||wb.length===0)return 0;var match=0;for(var i=0;i<wa.length;i++){if(wb.indexOf(wa[i])>=0)match++;}return match/Math.max(wa.length,wb.length);}
+
   // Load existing feedback for today
   fetch(SB_URL+'/rest/v1/feedback?date=eq.'+TODAY+'&select=cluster_name,action',{
     headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
@@ -268,13 +273,15 @@ var TODAY='2026-03-24';
     var rows=document.querySelectorAll('.row');
     for(var i=0;i<rows.length;i++){
       var name=rows[i].dataset.name;
+      var bestScore=0,bestAction=null;
       for(var j=0;j<data.length;j++){
-        if(data[j].cluster_name===name){
-          var btns=rows[i].querySelectorAll('button');
-          for(var k=0;k<btns.length;k++)btns[k].disabled=true;
-          rows[i].querySelector('.status').textContent='✓ '+data[j].action;
-          break;
-        }
+        var score=(data[j].cluster_name===name)?1:fuzzy(data[j].cluster_name,name);
+        if(score>bestScore){bestScore=score;bestAction=data[j].action;}
+      }
+      if(bestScore>=0.5&&bestAction){
+        var btns=rows[i].querySelectorAll('button');
+        for(var k=0;k<btns.length;k++)btns[k].disabled=true;
+        rows[i].querySelector('.status').textContent='\u2713 '+bestAction;
       }
     }
   });

@@ -283,7 +283,9 @@ function buildPage(
   barometer: MoodBarometer,
   clusters: SerializedCluster[],
   quiz: QuizQuestion[],
-  yesterdayMood: number | null
+  yesterdayMood: number | null,
+  totalArticles: number,
+  activeSources: number
 ): string {
   const dateFr = formatDateFr(date);
   const dateIso = toISODate(date);
@@ -367,8 +369,8 @@ a{color:#0057b7;}
 |____/|_|  \\___/ /_/
 </pre>
 <div class="about">
-50 sources françaises, scorées et triées chaque matin.
-pas de pub, pas d'éditorial, juste les faits.
+${totalArticles} articles lus ce matin dans ${activeSources} sources françaises.
+scorés, triés, résumés. pas de pub, pas d'éditorial, juste les faits.
 </div>
 <pre class="sep">════════════════════════════════════════</pre>
 <pre>${escapeHtml(dateFr)}</pre>
@@ -535,12 +537,26 @@ export async function generate(): Promise<void> {
     log(`Yesterday's mood: ${yesterdayMood}/100, today: ${barometer.mood}/100 (${barometer.mood - yesterdayMood >= 0 ? "+" : ""}${barometer.mood - yesterdayMood})`);
   }
 
+  // Count today's articles and active sources
+  const cutoff = new Date(now);
+  cutoff.setHours(cutoff.getHours() - 24);
+  const { count: totalArticles } = await supabase
+    .from("articles")
+    .select("id", { count: "exact", head: true })
+    .gte("published_at", cutoff.toISOString());
+  const { data: sourceCounts } = await supabase
+    .from("articles")
+    .select("source_id")
+    .gte("published_at", cutoff.toISOString());
+  const activeSources = new Set((sourceCounts ?? []).map((r) => r.source_id)).size;
+  log(`Today: ${totalArticles ?? 0} articles from ${activeSources} sources`);
+
   // Generate pages
-  const indexHtml = buildPage(articles, now, pastDates, recaps, barometer, clusters, quiz, yesterdayMood);
+  const indexHtml = buildPage(articles, now, pastDates, recaps, barometer, clusters, quiz, yesterdayMood, totalArticles ?? 0, activeSources);
   writeFileSync(path.join(distDir, "index.html"), indexHtml, "utf-8");
   log("✓ dist/index.html");
 
-  const datePage = buildPage(articles, now, pastDates, recaps, barometer, clusters, quiz, yesterdayMood);
+  const datePage = buildPage(articles, now, pastDates, recaps, barometer, clusters, quiz, yesterdayMood, totalArticles ?? 0, activeSources);
   writeFileSync(path.join(distDir, `${dateIso}.html`), datePage, "utf-8");
   log(`✓ dist/${dateIso}.html`);
 

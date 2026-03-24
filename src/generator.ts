@@ -285,10 +285,18 @@ function buildPage(
   quiz: QuizQuestion[],
   yesterdayMood: number | null,
   totalArticles: number,
-  activeSources: number
+  activeSources: number,
+  isIndex: boolean = false
 ): string {
   const dateFr = formatDateFr(date);
   const dateIso = toISODate(date);
+  const canonicalUrl = isIndex ? "https://www.5h07.fr/" : `https://www.5h07.fr/${dateIso}.html`;
+
+  // Extract first sentence from recap for meta description
+  const recapText = (recaps["principal"] ?? "").replace(/<[^>]*>/g, "").replace(/\[\[[^\]]*\]\]/g, "").trim();
+  const firstSentence = recapText.split(/(?<=[.!?])\s/)[0] || recapText.slice(0, 160);
+  const metaDesc = `${firstSentence} ${totalArticles} articles lus dans ${activeSources} sources françaises.`;
+  const ogTitle = `5h07 — l'actu française du ${dateFr}`;
 
   const seenSources = new Set<string>();
   const sourceLinks = articles
@@ -323,14 +331,38 @@ function buildPage(
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>5h07 — ${escapeHtml(dateFr)}</title>
+<title>${escapeHtml(ogTitle)}</title>
+<meta name="description" content="${escapeHtml(metaDesc.slice(0, 300))}">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="${canonicalUrl}">
 <link rel="alternate" type="application/rss+xml" title="5h07" href="/feed.xml">
+<meta property="og:title" content="${escapeHtml(ogTitle)}">
+<meta property="og:description" content="${escapeHtml(firstSentence.slice(0, 200))}">
+<meta property="og:type" content="article">
+<meta property="og:url" content="${canonicalUrl}">
+<meta property="og:locale" content="fr_FR">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="${escapeHtml(ogTitle)}">
+<meta name="twitter:description" content="${escapeHtml(firstSentence.slice(0, 200))}">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" href="/favicon.ico">
 <link rel="apple-touch-icon" href="/icon-192.png">
 <meta name="theme-color" content="#000000">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
+<script type="application/ld+json">
+${JSON.stringify({
+  "@context": "https://schema.org",
+  "@type": "NewsArticle",
+  "headline": ogTitle,
+  "description": firstSentence.slice(0, 200),
+  "datePublished": dateIso,
+  "dateModified": dateIso,
+  "url": canonicalUrl,
+  "publisher": { "@type": "Organization", "name": "5h07" },
+  "mainEntityOfPage": { "@type": "WebPage", "@id": canonicalUrl }
+})}
+</script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
 body{max-width:700px;margin:0 auto;padding:1.5em 1em;font-family:'Courier New',Courier,monospace;font-size:15px;line-height:1.6;color:#111;background:#FFFCF0;}
@@ -555,17 +587,28 @@ export async function generate(): Promise<void> {
   log(`Today: ${totalArticles ?? 0} articles from ${activeSources} sources`);
 
   // Generate pages
-  const indexHtml = buildPage(articles, now, pastDates, recaps, barometer, clusters, quiz, yesterdayMood, totalArticles ?? 0, activeSources);
+  const indexHtml = buildPage(articles, now, pastDates, recaps, barometer, clusters, quiz, yesterdayMood, totalArticles ?? 0, activeSources, true);
   writeFileSync(path.join(distDir, "index.html"), indexHtml, "utf-8");
   log("✓ dist/index.html");
 
-  const datePage = buildPage(articles, now, pastDates, recaps, barometer, clusters, quiz, yesterdayMood, totalArticles ?? 0, activeSources);
+  const datePage = buildPage(articles, now, pastDates, recaps, barometer, clusters, quiz, yesterdayMood, totalArticles ?? 0, activeSources, false);
   writeFileSync(path.join(distDir, `${dateIso}.html`), datePage, "utf-8");
   log(`✓ dist/${dateIso}.html`);
 
   const feed = buildFeed(articles, now);
   writeFileSync(path.join(distDir, "feed.xml"), feed, "utf-8");
   log("✓ dist/feed.xml");
+
+  // Generate sitemap
+  const allDates = [dateIso, ...pastDates.filter((d) => d !== dateIso)];
+  const sitemapEntries = [
+    `  <url><loc>https://www.5h07.fr/</loc><lastmod>${dateIso}</lastmod><changefreq>daily</changefreq><priority>1.0</priority></url>`,
+    `  <url><loc>https://www.5h07.fr/manifeste.html</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>`,
+    ...allDates.map((d) => `  <url><loc>https://www.5h07.fr/${d}.html</loc><lastmod>${d}</lastmod><changefreq>never</changefreq><priority>0.7</priority></url>`),
+  ];
+  const sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${sitemapEntries.join("\n")}\n</urlset>`;
+  writeFileSync(path.join(distDir, "sitemap.xml"), sitemap, "utf-8");
+  log("✓ dist/sitemap.xml");
 
   // Generate admin page
   const adminHtml = buildAdminPage(clusters, dateIso);

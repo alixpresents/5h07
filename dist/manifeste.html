@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>5h07 — manifeste</title>
+<link rel="icon" href="/favicon.ico">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<meta name="theme-color" content="#000000">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{max-width:700px;margin:0 auto;padding:1.5em 1em;font-family:'Courier New',Courier,monospace;font-size:15px;line-height:1.6;color:#111;background:#FFFCF0;}
+pre{white-space:pre-wrap;word-wrap:break-word;font-family:inherit;font-size:inherit;line-height:inherit;margin:0;}
+a{color:#0057b7;}
+.logo{font-size:0.75em;line-height:1.15;margin-bottom:0.5em;color:#333;}
+.sep{color:#999;margin:1.2em 0;overflow:hidden;}
+.dim{font-size:0.82em;color:#999;}
+.dim a{color:#999;}
+.footer{font-size:0.78em;color:#bbb;margin-top:1em;}
+.manifeste p{margin-bottom:0.8em;text-align:justify;}
+.manifeste h2{font-size:1em;margin:1.5em 0 0.5em;color:#333;}
+</style>
+</head>
+<body>
+<pre class="logo">
+ ____  _    ___  _____
+| ___|| |  / _ \|___  |
+|___ \| |_| | | |  / /
+ ___) |  _| |_| | / /
+|____/|_|  \___/ /_/
+</pre>
+<pre class="dim"><a href="/">← retour</a></pre>
+<pre class="sep">════════════════════════════════════════</pre>
+<pre class="section-title" style="font-weight:bold;font-size:1em;color:#333;">manifeste</pre>
+
+<div class="manifeste">
+
+<p>on a essayé de lire la presse française avec une machine. voilà ce qu'on a trouvé.</p>
+
+<p>pour construire 5h07, on a voulu faire un truc simple : chaque matin, lire ~50 sources de presse française, scorer les articles par pertinence, et sortir un récap de ce qui compte vraiment. pas de rédaction humaine, pas de ligne éditoriale, juste un algorithme qui croise la couverture médiatique et la diversité politique des sources.</p>
+
+<p>on pensait que le plus dur serait l'IA. le scoring, la déduplication, la synthèse. en fait non. le plus dur, c'est d'accéder à l'information.</p>
+
+<h2>les flux rss sont morts (ou mourants)</h2>
+
+<p>sur les 50 sources françaises qu'on a voulu brancher, 15 ne fonctionnent pas. soit l'url a changé sans prévenir, soit le flux renvoie une erreur 403 (accès interdit), soit il n'existe tout simplement plus.</p>
+
+<p>libération : erreur 500 depuis des semaines. les echos : 403. le parisien : 403. marianne : 403. le point : 404. lci : flux xml cassé. nice matin, le dauphiné, la provence, dna : 404.</p>
+
+<p>le rss, c'est un standard inventé en 1999. c'est ce qui permet à n'importe qui de suivre un site sans passer par un algorithme. c'est gratuit, c'est ouvert, c'est la base du web libre. et en 2026, un tiers de la presse française l'a abandonné ou cassé.</p>
+
+<p>pourquoi ? parce que le rss ne génère pas de pages vues. il ne permet pas de tracker l'utilisateur. il ne sert pas la publicité. donc il n'est pas maintenu.</p>
+
+<h2>les apis n'existent pas</h2>
+
+<p>aux états-unis, des services comme newsapi.org ou google news offrent des apis structurées pour accéder aux articles. c'est pas parfait, mais ça existe. en france, rien. aucun média français ne propose d'api publique pour accéder à ses contenus. zéro.</p>
+
+<p>le résultat : pour construire un outil comme 5h07, il faut bricoler. scraper des flux rss à moitié cassés, passer par des agrégateurs américains (google news, newsapi), et espérer que ça tienne. c'est fragile, c'est artisanal, et ça casse régulièrement.</p>
+
+<h2>le deal avec les gafam</h2>
+
+<p>pendant que les flux rss meurent, les médias français signent des deals avec les géants de la tech. le monde a signé un accord avec openai pour que chatgpt puisse accéder à ses contenus. on ne connaît pas les détails, mais on sait que c'est lucratif.</p>
+
+<p>ce qui veut dire : openai peut lire le monde, mais toi, développeur indépendant, tu ne peux pas. les gafam négocient l'accès à la presse avec des chèques. les projets citoyens, les chercheurs, les outils open source n'ont rien.</p>
+
+<p>c'est un choix. les médias préfèrent vendre leur contenu à une poignée de plateformes plutôt que de le rendre accessible à l'écosystème. c'est leur droit. mais c'est un choix qui a des conséquences.</p>
+
+<h2>ce que ça produit</h2>
+
+<p>quand l'accès à l'information est verrouillé par des accords commerciaux et des flux rss cassés, voilà ce qui se passe :</p>
+
+<p>les seuls outils capables d'agréger l'actu française sont ceux qui ont les moyens de payer. google news, apple news, chatgpt. les alternatives indépendantes, open source, citoyennes, sont structurellement désavantagées.</p>
+
+<p>la diversité des points d'entrée vers l'info se réduit. au lieu de 100 manières de lire la presse, il en reste 3 ou 4, toutes contrôlées par des entreprises américaines.</p>
+
+<p>et les médias eux-mêmes perdent le contact direct avec leurs lecteurs. ils deviennent dépendants des plateformes pour leur distribution, tout en leur vendant l'accès à leur contenu. c'est un cercle vicieux.</p>
+
+<h2>ce qu'on fait avec 5h07</h2>
+
+<p>on ne prétend pas résoudre le problème. 5h07 est un petit projet qui bricole avec ce qui est disponible : des flux rss quand ils marchent, google news et newsapi pour combler les trous, et une ia qui trie le tout.</p>
+
+<p>ce qu'on fait différemment, c'est la transparence. sur 5h07.fr, chaque sujet affiche son score, le nombre de sources qui en parlent, et la diversité politique de la couverture. si gauche et droite couvrent le même événement, c'est probablement important. si un seul camp en parle, ça mérite d'être signalé.</p>
+
+<p>on montre aussi les angles morts : les sujets couverts par un bord politique mais ignorés par l'autre.</p>
+
+<p>on ne cache rien. pas le fonctionnement de l'algorithme, pas les sources, pas les limites. c'est l'inverse de ce que font les plateformes, et c'est l'inverse de ce que font les médias qui ferment leurs flux rss.</p>
+
+<h2>ce qu'on demande</h2>
+
+<p>rien, en fait. les médias font ce qu'ils veulent avec leur contenu. mais si on croit que l'accès à l'information est un bien public, alors il faut se poser la question : est-ce que la direction actuelle est la bonne ?</p>
+
+<p>les flux rss pourraient être maintenus. ça coûte rien. les apis pourraient être ouvertes, au moins pour les titres et les chapôs. les deals avec les gafam pourraient inclure des clauses d'ouverture pour les projets non-commerciaux.</p>
+
+<p>rien de tout ça n'arrivera si personne n'en parle.</p>
+
+<p>on en parle.</p>
+
+</div>
+
+<pre class="sep">────────────────────────────────────────</pre>
+<pre class="dim">
+5h07 est un projet indépendant. le code est ouvert. le site
+est financé par ~15$/mois d'api ia et 7$/an de nom de domaine.
+pas de pub, pas d'investisseur, pas de rédaction. juste un type
+qui trouvait que lire l'actu le matin, c'était devenu trop
+compliqué.
+</pre>
+<pre class="sep">════════════════════════════════════════</pre>
+<div class="footer">5h07 — l'essentiel de l'actu française, chaque matin à 5h07.</div>
+</body>
+</html>

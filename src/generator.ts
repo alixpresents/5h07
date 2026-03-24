@@ -371,6 +371,7 @@ a{color:#0057b7;}
 <div class="about">
 ${totalArticles} articles lus ce matin dans ${activeSources} sources françaises.
 scorés, triés, résumés. pas de pub, pas d'éditorial, juste les faits.
+<a href="/manifeste.html">manifeste →</a>
 </div>
 <pre class="sep">════════════════════════════════════════</pre>
 <pre>${escapeHtml(dateFr)}</pre>
